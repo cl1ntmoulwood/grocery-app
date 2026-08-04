@@ -1,0 +1,14 @@
+# Builds the Vite/PWA frontend and serves it (plus proxies /api to the
+# backend) from a single Caddy image. Build context is the project root so
+# this stage can reach both frontend/ and the Caddyfile.
+
+FROM node:20-slim AS frontend-build
+WORKDIR /app
+COPY frontend/package.json frontend/package-lock.json* ./
+RUN npm install
+COPY frontend/ ./
+RUN npm run build
+
+FROM caddy:2-alpine
+COPY --from=frontend-build /app/dist /srv
+COPY Caddyfile /etc/caddy/Caddyfile

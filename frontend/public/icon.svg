@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="100" fill="#2f6f4f"/>
+
+  <!-- basket handle -->
+  <path d="M186 244 Q256 138 326 244" fill="none" stroke="#f7f5f0" stroke-width="26" stroke-linecap="round"/>
+
+  <!-- rim -->
+  <rect x="168" y="222" width="176" height="20" rx="10" fill="#f7f5f0"/>
+
+  <!-- basket body -->
+  <path d="M178 236 L334 236 L316 378 Q314 388 304 388 L208 388 Q198 388 196 378 Z" fill="#f7f5f0"/>
+
+  <!-- weave detail -->
+  <path d="M192 274 L320 274" stroke="#2f6f4f" stroke-width="7" stroke-linecap="round"/>
+  <path d="M188 310 L324 310" stroke="#2f6f4f" stroke-width="7" stroke-linecap="round"/>
+  <path d="M198 346 L314 346" stroke="#2f6f4f" stroke-width="7" stroke-linecap="round"/>
+</svg>

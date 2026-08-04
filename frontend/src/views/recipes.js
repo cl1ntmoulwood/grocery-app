@@ -1,0 +1,262 @@
+import { recipesApi } from "../api.js";
+import { showError, showToast } from "../toast.js";
+
+let state = {
+  mode: "list", // "list" | "detail" | "add"
+  recipes: [],
+  detail: null, // full recipe + ingredients
+  checkResult: null, // array from check-inventory
+};
+
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str ?? "";
+  return div.innerHTML;
+}
+
+function statusBadge(status) {
+  const cls = status === "ok" ? "badge-ok" : status === "insufficient" ? "badge-warning" : "badge-danger";
+  return `<span class="badge ${cls}">${status.replace("_", " ")}</span>`;
+}
+
+// ---------------------------------------------------------------- list ----
+
+function listTemplate() {
+  return `
+    <button class="btn btn-primary" id="rec-new-btn" style="margin-bottom:0.75rem">+ New recipe</button>
+    ${
+      state.recipes.length
+        ? state.recipes
+            .map(
+              (r) => `
+        <div class="card" data-id="${r.id}">
+          <div class="card-row">
+            <div>
+              <div class="card-title">${escapeHtml(r.title)}</div>
+              <div class="card-meta">${r.servings ? `${r.servings} servings` : ""}</div>
+            </div>
+            <button class="btn btn-sm" data-action="view">View</button>
+          </div>
+        </div>
+      `
+            )
+            .join("")
+        : '<div class="empty-state">No recipes yet.</div>'
+    }
+  `;
+}
+
+async function renderList(container) {
+  container.innerHTML = '<div class="empty-state">Loading…</div>';
+  try {
+    state.recipes = await recipesApi.list();
+  } catch (err) {
+    showError(err);
+  }
+  container.innerHTML = listTemplate();
+
+  container.querySelector("#rec-new-btn").addEventListener("click", () => {
+    state.mode = "add";
+    renderView(container);
+  });
+
+  container.querySelectorAll(".card[data-id]").forEach((card) => {
+    card.querySelector('[data-action="view"]').addEventListener("click", async () => {
+      state.mode = "detail";
+      await openDetail(container, card.dataset.id);
+    });
+  });
+}
+
+// -------------------------------------------------------------- detail ----
+
+async function openDetail(container, id) {
+  container.innerHTML = '<div class="empty-state">Loading…</div>';
+  state.checkResult = null;
+  try {
+    state.detail = await recipesApi.get(id);
+  } catch (err) {
+    showError(err);
+    state.mode = "list";
+    return renderView(container);
+  }
+  renderView(container);
+}
+
+function detailTemplate() {
+  const r = state.detail;
+  return `
+    <button class="link-btn" id="rec-back-btn">&larr; Back to recipes</button>
+    <div class="card" style="margin-top:0.5rem">
+      <div class="card-title" style="font-size:1.2rem">${escapeHtml(r.title)}</div>
+      <div class="card-meta">${r.servings ? `${r.servings} servings` : ""}</div>
+      ${r.instructions ? `<p>${escapeHtml(r.instructions)}</p>` : ""}
+    </div>
+
+    <div class="card">
+      <div class="section-title">Ingredients</div>
+      ${
+        r.ingredients.length
+          ? r.ingredients
+              .map((ing) => {
+                const check = state.checkResult?.find((c) => c.ingredient_name === ing.ingredient_name);
+                return `
+            <div class="card-row" style="padding:0.25rem 0">
+              <span>${escapeHtml(ing.ingredient_name)} &mdash; ${ing.quantity_needed} ${escapeHtml(ing.unit || "")}</span>
+              ${check ? statusBadge(check.status) : ""}
+            </div>
+          `;
+              })
+              .join("")
+          : '<div class="card-meta">No ingredients listed.</div>'
+      }
+    </div>
+
+    <div class="card-row" style="gap:0.5rem">
+      <button class="btn" id="rec-check-btn">Check inventory</button>
+      <button class="btn" id="rec-genlist-btn">Add missing to shopping list</button>
+      <button class="btn btn-danger" id="rec-delete-btn">Delete recipe</button>
+    </div>
+  `;
+}
+
+function wireDetailEvents(container) {
+  container.querySelector("#rec-back-btn").addEventListener("click", () => {
+    state.mode = "list";
+    renderView(container);
+  });
+
+  container.querySelector("#rec-check-btn").addEventListener("click", async () => {
+    try {
+      state.checkResult = await recipesApi.checkInventory(state.detail.id);
+      container.innerHTML = detailTemplate();
+      wireDetailEvents(container);
+      showToast("Inventory checked");
+    } catch (err) {
+      showError(err);
+    }
+  });
+
+  container.querySelector("#rec-genlist-btn").addEventListener("click", async () => {
+    try {
+      const added = await recipesApi.generateList(state.detail.id);
+      showToast(added.length ? `Added ${added.length} item(s) to shopping list` : "Nothing missing — all set!");
+    } catch (err) {
+      showError(err);
+    }
+  });
+
+  container.querySelector("#rec-delete-btn").addEventListener("click", async () => {
+    if (!confirm("Delete this recipe?")) return;
+    try {
+      await recipesApi.remove(state.detail.id);
+      showToast("Recipe deleted");
+      state.mode = "list";
+      renderView(container);
+    } catch (err) {
+      showError(err);
+    }
+  });
+}
+
+// ----------------------------------------------------------------- add ----
+
+function addTemplate() {
+  return `
+    <button class="link-btn" id="rec-back-btn">&larr; Back to recipes</button>
+    <form class="card" id="rec-add-form" style="margin-top:0.5rem">
+      <div class="section-title">New recipe</div>
+      <div><label>Title</label><input type="text" name="title" required /></div>
+      <div class="form-row">
+        <div><label>Servings</label><input type="number" name="servings" /></div>
+      </div>
+      <div><label>Instructions</label><textarea name="instructions"></textarea></div>
+
+      <div class="section-title" style="margin-top:0.75rem">Ingredients</div>
+      <div id="rec-ingredients"></div>
+      <button type="button" class="btn btn-sm" id="rec-add-ingredient">+ Add ingredient</button>
+
+      <button class="btn btn-primary" type="submit" style="margin-top:0.75rem">Save recipe</button>
+    </form>
+  `;
+}
+
+function ingredientRowHtml() {
+  return `
+    <div class="ingredient-row">
+      <input type="text" placeholder="Ingredient name" data-field="ingredient_name" required />
+      <input type="number" step="any" placeholder="Qty" data-field="quantity_needed" required />
+      <input type="text" placeholder="Unit" data-field="unit" />
+      <button type="button" class="btn btn-sm btn-danger" data-action="remove-ingredient">&times;</button>
+    </div>
+  `;
+}
+
+function wireAddEvents(container) {
+  const ingredientsEl = container.querySelector("#rec-ingredients");
+
+  const addRow = () => {
+    const wrapper = document.createElement("div");
+    wrapper.innerHTML = ingredientRowHtml();
+    const row = wrapper.firstElementChild;
+    row.querySelector('[data-action="remove-ingredient"]').addEventListener("click", () => row.remove());
+    ingredientsEl.appendChild(row);
+  };
+
+  container.querySelector("#rec-back-btn").addEventListener("click", () => {
+    state.mode = "list";
+    renderView(container);
+  });
+
+  container.querySelector("#rec-add-ingredient").addEventListener("click", addRow);
+  addRow(); // start with one row
+
+  container.querySelector("#rec-add-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const form = e.target;
+
+    const ingredients = [...ingredientsEl.children]
+      .map((row) => ({
+        ingredient_name: row.querySelector('[data-field="ingredient_name"]').value.trim(),
+        quantity_needed: row.querySelector('[data-field="quantity_needed"]').value,
+        unit: row.querySelector('[data-field="unit"]').value.trim() || undefined,
+      }))
+      .filter((i) => i.ingredient_name);
+
+    const data = {
+      title: form.title.value.trim(),
+      servings: form.servings.value || undefined,
+      instructions: form.instructions.value.trim() || undefined,
+      ingredients,
+    };
+
+    try {
+      await recipesApi.create(data);
+      showToast("Recipe created");
+      state.mode = "list";
+      renderView(container);
+    } catch (err) {
+      showError(err);
+    }
+  });
+}
+
+// --------------------------------------------------------------- router ---
+
+function renderView(container) {
+  if (state.mode === "detail" && state.detail) {
+    container.innerHTML = detailTemplate();
+    wireDetailEvents(container);
+  } else if (state.mode === "add") {
+    container.innerHTML = addTemplate();
+    wireAddEvents(container);
+  } else {
+    state.mode = "list";
+    renderList(container);
+  }
+}
+
+export async function render(container) {
+  state.mode = "list";
+  await renderList(container);
+}

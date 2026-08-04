@@ -1,0 +1,13 @@
+# Local-network-only HTTP proxy. Add a domain + TLS/ACME config here before
+# exposing this to the public internet.
+:80 {
+	handle /api/* {
+		reverse_proxy backend:3000
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

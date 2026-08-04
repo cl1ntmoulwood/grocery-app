@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+
+# Build output
+frontend/dist/
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# Env / secrets
+.env
+.env.*
+
+# Claude Code local settings (machine-specific, not shared)
+.claude/settings.local.json
+
+# OS cruft
+.DS_Store
