@@ -3,6 +3,7 @@ import { registerSW } from "virtual:pwa-register";
 import { render as renderInventory } from "./views/inventory.js";
 import { render as renderShoppingList } from "./views/shoppingList.js";
 import { render as renderRecipes } from "./views/recipes.js";
+import { render as renderPrices } from "./views/prices.js";
 
 registerSW({ immediate: true });
 
@@ -10,6 +11,7 @@ const views = {
   inventory: renderInventory,
   "shopping-list": renderShoppingList,
   recipes: renderRecipes,
+  prices: renderPrices,
 };
 
 const app = document.getElementById("app");

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-bringo_scraper.py — Standalone price scraper for bringo.ma search results.
+bringo_scraper.py — Standalone price scraper for bringo.ma category search
+results.
 
 Part of the Family Pantry & Local Price Tracker project. This script is
 intentionally NOT invoked by the backend API (see backend/src/routes/inventory.js
@@ -8,54 +9,52 @@ POST /inventory/sync, which is a 501 stub on purpose). Run it manually or via
 cron on the home server to populate the `price_history` table over time.
 
 Usage:
-    python bringo_scraper.py "Lait"
-    python bringo_scraper.py "Huile d'olive" --max-pages 2
+    python bringo_scraper.py "LAIT UHT" --category produits-laitiers-oeufs-8
+    python bringo_scraper.py "LAIT" --category produits-laitiers-oeufs-8 \
+        --store carrefour-supermarket-market-yaacoub-al-mansour --max-pages 2
 
 Requires DATABASE_URL in the environment or a local .env file, e.g.:
     DATABASE_URL=postgres://pantry:pantry@localhost:5432/pantry
 
 ===============================================================================
-!! CAVEAT — READ BEFORE RELYING ON THIS SCRIPT IN PRODUCTION !!
+VERIFIED AGAINST THE REAL SITE (2026) — read this before changing SELECTORS
 
-UPDATE: a follow-up check with real (if limited) web access confirmed this
-script's original assumptions were wrong, not just imprecise:
+Earlier versions of this script guessed at a generic Magento/PrestaShop-style
+search URL and CSS selectors, and were confirmed broken (404s, empty pages).
+This version is built from real, captured bringo.ma HTML (a live product
+card's outerHTML, via browser DevTools) and a confirmed-working request
+(via a captured curl command), not guesses. What's confirmed:
 
-  - bringo.ma is "BRINGO by Carrefour", an address/delivery-zone-gated
-    grocery app — NOT a generic Magento/PrestaShop storefront.
-  - The guessed search URL (SEARCH_URL_TEMPLATE below) returned a CONFIRMED
-    HTTP 404. It does not work. There is no evidence the site supports a
-    simple `?q=<term>` keyword search at all — the fetched pages instead
-    show category navigation tiles (e.g. "Epicerie", "Boulangerie &
-    Pâtisserie") reachable only after picking a delivery address/store.
-  - There are signs (spinner/toast asset references, client-side confirm
-    dialogs) suggesting at least some content loads via JavaScript/XHR
-    after the initial page load, which a plain `requests` GET will not
-    execute. It was NOT possible to confirm whether product/price data is
-    present in the initial server-rendered HTML or only arrives via a
-    later API call — that distinction determines whether a
-    requests+BeautifulSoup approach can work here at all.
+  - The site runs on Sylius (a Symfony e-commerce framework), not Magento/
+    PrestaShop. Product search markup uses Constructor.io tracking
+    attributes (data-cnstrc-*), which conveniently double as a clean,
+    reliable source for title/price — no fragile text parsing needed.
+  - The working URL shape is:
+        https://www.bringo.ma/fr_MA/store/{store}/{category}
+            ?criteria[search][value]={term}
+    This requires BOTH a specific store slug AND a specific category slug
+    (with its numeric ID suffix, e.g. "produits-laitiers-oeufs-8") — there
+    is no site-wide keyword search. Searching a term against the wrong
+    category returns zero results (confirmed: searching "PAIN" inside the
+    dairy category returns "Il n'y a aucun résultat à afficher", not bread
+    products) — the search filters WITHIN the given category, it does not
+    search the whole catalog.
+  - No delivery-address selection or login/session cookie was required to
+    fetch real product data this way — a plain unauthenticated GET works.
 
-The CSS selectors in SELECTORS below remain unverified best-effort guesses
-on top of this now-shakier foundation. Before trusting any data this script
-writes to `price_history`:
-
-  1. In a real browser, walk through bringo.ma's actual flow: select a
-     delivery address/store, then find how product search or category
-     browsing actually works (URL pattern, query params).
-  2. Open DevTools' Network tab (not just "View Page Source") while doing
-     that, and check whether product/price data appears in the initial
-     HTML document or in a separate XHR/fetch JSON response. If it's the
-     latter, this script needs to be rewritten to call that JSON endpoint
-     directly instead of parsing HTML with BeautifulSoup — likely simpler
-     and more reliable than DOM scraping once found.
-  3. Only if product data is present in server-rendered HTML: update
-     SEARCH_URL_TEMPLATE and the SELECTORS dict below to match reality.
-  4. Run this script against a small, throwaway search term and manually
-     verify a handful of rows in `price_history` look correct (title, price,
-     unit) before trusting the price history chart data.
-
-Do NOT ship this to "production" family use without doing the above — the
-current SEARCH_URL_TEMPLATE will simply 404 on every run as-is.
+WHAT'S STILL UNVERIFIED:
+  - Pagination: robots.txt disallows crawling "*?page=" which implies a
+    `page` query param exists, but the exact behavior (1-indexed? what
+    happens past the last page?) was not directly observed. Keep
+    --max-pages low and sanity-check results if you rely on page 2+.
+  - Category IDs are per-category, not per-search-term. You need to find
+    the right category slug+id for whatever you want to track — either by
+    browsing bringo.ma yourself and copying the URL segment after
+    `/store/{store}/`, or from the category sitemap:
+        https://bringo.ma/sitemaps/sitemaps-generic/sitemap-generic-category-ma.xml
+  - Only one store branch (carrefour-supermarket-market-yaacoub-al-mansour)
+    was tested. Other store slugs (from the store sitemap) are assumed to
+    follow the same URL shape but weren't individually verified.
 ===============================================================================
 """
 
@@ -68,6 +67,7 @@ import random
 import re
 import sys
 import time
+import urllib.parse
 from decimal import Decimal, InvalidOperation
 from urllib.parse import quote, urljoin
 
@@ -81,25 +81,19 @@ from dotenv import load_dotenv
 # ------------------------------------------------------------------------
 
 BASE_URL = "https://www.bringo.ma"
-# NOTE: The real search path/query-param name (e.g. "?q=" vs "?search=") is
-# also unverified — confirm this against a real browser request before use.
-SEARCH_URL_TEMPLATE = f"{BASE_URL}/catalogsearch/result/?q={{query}}"
+DEFAULT_STORE = "carrefour-supermarket-market-yaacoub-al-mansour"
 
-# --- BEST-EFFORT PLACEHOLDER SELECTORS ------------------------------------
-# See the caveat block in the module docstring above. Every one of these
-# CSS selectors is a guess and MUST be verified against bringo.ma's real
-# markup before this scraper is relied on for accurate data.
+# Confirmed working shape: /fr_MA/store/{store}/{category}?criteria[search][value]={term}
+SEARCH_URL_TEMPLATE = f"{BASE_URL}/fr_MA/store/{{store}}/{{category}}"
+
 SELECTORS = {
-    "product_card": "li.product-item, div.product-item",
-    "title": ".product-item-link, .product-item-name a",
-    "price": ".price-box .price, span.price",
-    "unit": ".product-item-unit, .unit-label",
-    "image": ".product-image-photo",
-    "link": ".product-item-link, .product-item-name a",
-    # Placeholder for a "next page" link, in case pagination is supported.
-    "next_page": "a.action.next",
+    "product_card": "div.box-product",
+    "link": "a.bringo-product-name",
+    "image": "img.image-product",
+    # Fallback text selector, used only if the data-cnstrc-item-price
+    # attribute is ever missing from a card.
+    "price_fallback": ".bringo-product-price",
 }
-# ---------------------------------------------------------------------------
 
 REQUEST_HEADERS = {
     "User-Agent": (
@@ -122,8 +116,9 @@ REQUEST_TIMEOUT_SECONDS = 15
 MIN_DELAY_SECONDS = 2.0
 MAX_DELAY_SECONDS = 5.0
 
-# Hard safety cap so a bad --max-pages value (or a runaway "next page" loop)
-# can't hammer the site. This is a personal, low-volume price tracker.
+# Hard safety cap so a bad --max-pages value can't hammer the site. This is
+# a personal, low-volume price tracker, and pagination behavior here is
+# unverified (see docstring) — keep this conservative.
 MAX_PAGES_HARD_LIMIT = 5
 
 logging.basicConfig(
@@ -147,30 +142,42 @@ def polite_sleep() -> None:
 
 def parse_price_mad(raw_text: str) -> Decimal | None:
     """
-    Extract a MAD price from a raw price string like "12,50 DH", "12.50 MAD",
-    or "Prix: 12,50 Dh". Returns None if no number could be parsed.
+    Fallback price parser for the visible ".bringo-product-price" text
+    (e.g. "59,95 MAD"), only used if a card is missing the
+    data-cnstrc-item-price attribute. Moroccan sites use comma as the
+    decimal separator.
     """
     if not raw_text:
         return None
-    # Keep digits, comma, and dot; Moroccan sites often use comma as the
-    # decimal separator (e.g. "12,50").
-    cleaned = re.sub(r"[^\d,.\s]", "", raw_text).strip()
-    cleaned = cleaned.replace(" ", "")
+    cleaned = re.sub(r"[^\d,.\s]", "", raw_text).strip().replace(" ", "").replace("\xa0", "")
     if not cleaned:
         return None
-
-    # If both comma and dot are present, assume dot is a thousands separator
-    # and comma is the decimal separator (common in French-locale pricing).
     if "," in cleaned and "." in cleaned:
         cleaned = cleaned.replace(".", "").replace(",", ".")
     elif "," in cleaned:
         cleaned = cleaned.replace(",", ".")
-
     try:
         return Decimal(cleaned)
     except InvalidOperation:
         logger.warning("Could not parse price from raw text: %r", raw_text)
         return None
+
+
+def build_search_url(store: str, category: str, search_term: str | None, page: int) -> str:
+    """
+    If search_term is None, no search filter is applied and the category's
+    default product listing is returned (confirmed: a category URL with no
+    query params shows its normal product listing, not an empty page).
+    """
+    base = SEARCH_URL_TEMPLATE.format(store=store, category=category)
+    params = {}
+    if search_term:
+        params["criteria[search][value]"] = search_term
+    if page > 1:
+        params["page"] = str(page)
+    if not params:
+        return base
+    return f"{base}?{urllib.parse.urlencode(params)}"
 
 
 def fetch_page(session: requests.Session, url: str) -> BeautifulSoup | None:
@@ -191,49 +198,50 @@ def fetch_page(session: requests.Session, url: str) -> BeautifulSoup | None:
 
 def parse_product_card(card, search_term: str) -> dict | None:
     """
-    Parse a single product card element into a row dict for price_history.
-    Returns None (and logs a warning) if the card is missing required fields
-    rather than raising, so one bad card never crashes the whole run.
+    Parse a single .box-product card into a row dict for price_history.
+    Prefers the data-cnstrc-item-name / data-cnstrc-item-price attributes
+    (clean, structured, and directly on the card) over text scraping.
+    Returns None (and logs a warning) if the card is missing required
+    fields, so one bad card never crashes the whole run.
     """
     try:
-        title_el = card.select_one(SELECTORS["title"])
-        price_el = card.select_one(SELECTORS["price"])
-        unit_el = card.select_one(SELECTORS["unit"])
-        image_el = card.select_one(SELECTORS["image"])
-        link_el = card.select_one(SELECTORS["link"])
+        title = card.get("data-cnstrc-item-name")
+        price_attr = card.get("data-cnstrc-item-price")
 
-        if title_el is None or price_el is None:
+        price_mad = None
+        if price_attr:
+            try:
+                price_mad = Decimal(price_attr)
+            except InvalidOperation:
+                price_mad = None
+        if price_mad is None:
+            # Fallback to the visible price text if the attribute is
+            # missing or unparsable.
+            price_el = card.select_one(SELECTORS["price_fallback"])
+            price_mad = parse_price_mad(price_el.get_text(strip=True)) if price_el else None
+
+        if not title or price_mad is None:
             logger.warning(
-                "Skipping product card: missing title or price element "
-                "(selectors may be out of date — see SELECTORS caveat)"
+                "Skipping product card: missing title or unparsable price "
+                "(title=%r, price_attr=%r) — markup may have changed, see SELECTORS caveat",
+                title,
+                price_attr,
             )
             return None
 
-        title = title_el.get_text(strip=True)
-        price_mad = parse_price_mad(price_el.get_text(strip=True))
-        if not title or price_mad is None:
-            logger.warning("Skipping product card: empty title or unparsable price (title=%r)", title)
-            return None
+        link_el = card.select_one(SELECTORS["link"])
+        product_url = urljoin(BASE_URL, link_el["href"]) if link_el and link_el.get("href") else None
 
-        unit = unit_el.get_text(strip=True) if unit_el else None
-
-        image_url = None
-        if image_el is not None:
-            image_url = image_el.get("src") or image_el.get("data-src")
-            if image_url:
-                image_url = urljoin(BASE_URL, image_url)
-
-        product_url = None
-        if link_el is not None:
-            href = link_el.get("href")
-            if href:
-                product_url = urljoin(BASE_URL, href)
+        image_el = card.select_one(SELECTORS["image"])
+        image_url = image_el.get("src") if image_el else None
+        if image_url:
+            image_url = urljoin(BASE_URL, image_url)
 
         return {
             "search_term": search_term,
             "product_title": title,
             "price_mad": price_mad,
-            "unit": unit,
+            "unit": None,  # no separate unit field in the markup; it's embedded in the title
             "image_url": image_url,
             "product_url": product_url,
         }
@@ -242,49 +250,52 @@ def parse_product_card(card, search_term: str) -> dict | None:
         return None
 
 
-def scrape_search_results(search_term: str, max_pages: int = 1) -> list[dict]:
+def scrape_search_results(
+    store: str, category: str, search_term: str | None, max_pages: int = 1
+) -> list[dict]:
     """
-    Scrape up to `max_pages` of bringo.ma search results for `search_term`.
-    Returns a list of product row dicts ready for insertion.
+    Scrape up to `max_pages` of bringo.ma results for `search_term` within
+    `category` at `store`. If `search_term` is None, no filter is applied
+    and the category's own slug is used as the stored search_term label
+    instead (so results are still findable via the Prices tab by category
+    name). Returns a list of product row dicts ready for insertion. Stops
+    as soon as a page yields zero product cards (used as the pagination
+    end signal, since "next page" link behavior is unverified — see
+    docstring).
     """
     max_pages = max(1, min(max_pages, MAX_PAGES_HARD_LIMIT))
+    label = search_term or category
 
     session = requests.Session()
     products: list[dict] = []
-    url = SEARCH_URL_TEMPLATE.format(query=quote(search_term))
 
     for page_num in range(1, max_pages + 1):
-        logger.info("Fetching page %d for search term %r: %s", page_num, search_term, url)
+        url = build_search_url(store, category, search_term, page_num)
+        logger.info("Fetching page %d for %r: %s", page_num, label, url)
         soup = fetch_page(session, url)
         if soup is None:
-            logger.error("Aborting further pagination for %r after fetch failure", search_term)
+            logger.error("Aborting further pagination for %r after fetch failure", label)
             break
 
         cards = soup.select(SELECTORS["product_card"])
         if not cards:
-            logger.warning(
-                "No product cards found on page %d (selector %r may be wrong "
-                "or there are no more results) — see SELECTORS caveat",
+            logger.info(
+                "No product cards found on page %d — treating as end of results "
+                "(or the category/search term has no matches)",
                 page_num,
-                SELECTORS["product_card"],
             )
             break
 
         logger.info("Found %d product card(s) on page %d", len(cards), page_num)
         for card in cards:
-            row = parse_product_card(card, search_term)
+            row = parse_product_card(card, label)
             if row is not None:
                 products.append(row)
 
-        next_link = soup.select_one(SELECTORS["next_page"])
-        next_href = next_link.get("href") if next_link else None
-        if not next_href or page_num >= max_pages:
-            break
+        if page_num < max_pages:
+            polite_sleep()
 
-        url = urljoin(BASE_URL, next_href)
-        polite_sleep()
-
-    logger.info("Scraped %d product row(s) total for search term %r", len(products), search_term)
+    logger.info("Scraped %d product row(s) total for %r", len(products), label)
     return products
 
 
@@ -350,25 +361,51 @@ def main() -> int:
     load_dotenv()  # loads .env if present; existing env vars take precedence
 
     parser = argparse.ArgumentParser(
-        description="Scrape bringo.ma search results and store prices in price_history."
+        description="Scrape bringo.ma category search results and store prices in price_history."
     )
-    parser.add_argument("search_term", help='Search term, e.g. "Lait"')
+    parser.add_argument(
+        "search_term",
+        nargs="?",
+        default=None,
+        help=(
+            'Optional search term, e.g. "LAIT UHT" (filters WITHIN --category). '
+            "If omitted, scrapes the category's full default product listing instead, "
+            "and the category slug is used as the stored search_term label."
+        ),
+    )
+    parser.add_argument(
+        "--category",
+        required=True,
+        help=(
+            "Category slug+id, e.g. produits-laitiers-oeufs-8 — required, there is no "
+            "site-wide search. Find it by browsing bringo.ma and copying the URL segment "
+            "after /store/{store}/, or from the category sitemap (see docstring)."
+        ),
+    )
+    parser.add_argument(
+        "--store",
+        default=DEFAULT_STORE,
+        help=f"Store slug (default: {DEFAULT_STORE}). Only this one has been verified.",
+    )
     parser.add_argument(
         "--max-pages",
         type=int,
         default=1,
         help=f"Max result pages to fetch (default 1, hard-capped at {MAX_PAGES_HARD_LIMIT}). "
-        "Keep this low — this is a polite, low-volume personal scraper.",
+        "Pagination behavior is unverified — keep this low. This is a polite, "
+        "low-volume personal scraper, not a crawler.",
     )
     args = parser.parse_args()
 
-    search_term = args.search_term.strip()
-    if not search_term:
-        logger.error("search_term must not be empty")
-        return 1
+    search_term = args.search_term.strip() if args.search_term else None
 
-    logger.info("Starting bringo.ma scrape for %r", search_term)
-    products = scrape_search_results(search_term, max_pages=args.max_pages)
+    logger.info(
+        "Starting bringo.ma scrape: store=%r category=%r term=%r",
+        args.store,
+        args.category,
+        search_term or "(none — full category listing)",
+    )
+    products = scrape_search_results(args.store, args.category, search_term, max_pages=args.max_pages)
     insert_price_rows(products)
     logger.info("Done.")
     return 0

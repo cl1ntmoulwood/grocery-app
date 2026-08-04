@@ -64,4 +64,9 @@ export const shoppingListApi = {
   remove: (id) => request(`/api/shopping-list/${id}`, { method: "DELETE" }),
 };
 
+export const pricesApi = {
+  latest: (term) => request(`/api/prices/${encodeURIComponent(term)}`),
+  history: (term) => request(`/api/prices/${encodeURIComponent(term)}/history`),
+};
+
 export { ApiError };
