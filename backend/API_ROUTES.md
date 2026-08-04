@@ -77,8 +77,15 @@ Table: `price_history` (id, search_term, product_title, price_mad, unit, image_u
 
 | Method | Path                        | Notes |
 |--------|-----------------------------|-------|
-| GET    | /api/prices/:term            | Most recent row per distinct `product_title` for `search_term` (via `DISTINCT ON`). |
-| GET    | /api/prices/:term/history     | All rows for `search_term`, ordered by `scraped_at ASC`, for charting. |
+| GET    | /api/prices/:term            | Most recent row per distinct `product_title` matching `:term` (via `DISTINCT ON`). |
+| GET    | /api/prices/:term/history     | All rows matching `:term`, ordered by `scraped_at ASC`, for charting. |
+
+Matching (both endpoints): `ILIKE` partial match against **both** `search_term`
+and `product_title` — a term can match the scrape category label or an
+individual product's name. The term is also expanded through a curated
+English/French grocery synonym list (`backend/src/utils/groceryTranslations.js`)
+before matching, e.g. searching "milk" also tries "lait" and vice versa,
+since bringo.ma's own data is French.
 
 ## Error handling conventions
 

@@ -1,6 +1,21 @@
 import { inventoryApi } from "../api.js";
 import { showError, showToast } from "../toast.js";
 
+// Fixed, sensible household categories for the Add-item suggestion list —
+// independent of scraped price data, which reflects a grocery site's own
+// e-commerce browsing taxonomy (French, narrow), not how a family organizes
+// a fridge/pantry. The field is still free text, so anything else works too.
+const HOUSEHOLD_CATEGORIES = [
+  "Dairy & Eggs",
+  "Fruits & Vegetables",
+  "Bakery",
+  "Meat & Poultry",
+  "Pantry",
+  "Beverages",
+  "Frozen",
+  "Household",
+];
+
 let state = {
   items: [],
   category: "",
@@ -80,7 +95,13 @@ function template() {
       <div class="section-title">Add item</div>
       <div class="form-row">
         <div><label>Name</label><input type="text" name="name" required /></div>
-        <div><label>Category</label><input type="text" name="category" /></div>
+        <div>
+          <label>Category</label>
+          <input type="text" name="category" list="inv-category-suggestions" placeholder="e.g. Pantry" />
+          <datalist id="inv-category-suggestions">
+            ${HOUSEHOLD_CATEGORIES.map((c) => `<option value="${escapeHtml(c)}"></option>`).join("")}
+          </datalist>
+        </div>
       </div>
       <div class="form-row">
         <div><label>Quantity</label><input type="number" step="any" name="quantity" required /></div>

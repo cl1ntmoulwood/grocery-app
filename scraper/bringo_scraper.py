@@ -264,7 +264,11 @@ def scrape_search_results(
     docstring).
     """
     max_pages = max(1, min(max_pages, MAX_PAGES_HARD_LIMIT))
-    label = search_term or category
+    # Strip a trailing numeric ID suffix (e.g. "produits-laitiers-oeufs-8" ->
+    # "produits-laitiers-oeufs") so the stored label is a clean, consistent
+    # category name regardless of whether this particular category needed
+    # an ID suffix in its URL.
+    label = search_term or re.sub(r"-\d+$", "", category)
 
     session = requests.Session()
     products: list[dict] = []
