@@ -1,0 +1,7 @@
+# Tiny local DNS resolver so courses.home resolves for every device on the
+# LAN, not just this machine's own /etc/hosts. See dnsmasq.conf.
+
+FROM alpine:3.20
+RUN apk add --no-cache dnsmasq
+COPY dnsmasq.conf /etc/dnsmasq.conf
+ENTRYPOINT ["dnsmasq", "-k", "-C", "/etc/dnsmasq.conf"]

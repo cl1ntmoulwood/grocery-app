@@ -40,5 +40,15 @@ services:
     depends_on:
       - backend
 
+  dns:
+    build:
+      context: .
+      dockerfile: Dockerfile.dnsmasq
+    restart: unless-stopped
+    # Host networking so dnsmasq can bind directly to the LAN interface
+    # (listen-address in dnsmasq.conf) — a bridge network's NAT can't serve
+    # DNS to other devices on the LAN the way this needs to.
+    network_mode: host
+
 volumes:
   pantry_db_data:
