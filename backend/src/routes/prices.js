@@ -20,6 +20,51 @@ function searchPattern(term) {
 }
 
 export default async function pricesRoutes(fastify) {
+  // One tile per distinct search_term actually present in the scraped data
+  // (not a hardcoded list), with a representative image, so the category
+  // strip only ever offers categories that will actually return results.
+  // Registered before /:term so the static path isn't shadowed.
+  fastify.get("/prices/categories", async (request, reply) => {
+    try {
+      const result = await pool.query(
+        `SELECT DISTINCT ON (search_term) search_term, image_url
+         FROM price_history
+         ORDER BY search_term, scraped_at DESC`
+      );
+      return result.rows;
+    } catch (err) {
+      request.log.error(err);
+      return sendError(reply, 500, "Failed to fetch price categories");
+    }
+  });
+
+  // Prefix-per-word match ("\ylait" with no closing boundary) so autocomplete
+  // returns results as the user types, e.g. "la" -> "Lait Central 1L". This
+  // is intentionally looser than the whole-word matching on /prices/:term,
+  // which exists to avoid false positives on short words like "eau" inside
+  // "pruneau" — a prefix match on "eau" alone wouldn't have that problem,
+  // but a suggestion list is a lower-stakes context than a search result.
+  // Registered before /:term so the static path isn't shadowed by the param
+  // route.
+  fastify.get("/prices/suggest", async (request, reply) => {
+    const term = (request.query.term || "").trim();
+    if (term.length < 2) return [];
+    try {
+      const result = await pool.query(
+        `SELECT DISTINCT ON (product_title) product_title, price_mad, unit
+         FROM price_history
+         WHERE product_title ~* $1
+         ORDER BY product_title, scraped_at DESC
+         LIMIT 8`,
+        [`\\y${escapeRegex(term)}`]
+      );
+      return result.rows;
+    } catch (err) {
+      request.log.error(err);
+      return sendError(reply, 500, "Failed to fetch price suggestions");
+    }
+  });
+
   fastify.get("/prices/:term/history", async (request, reply) => {
     const { term } = request.params;
     try {

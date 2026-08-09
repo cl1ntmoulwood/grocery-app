@@ -84,15 +84,19 @@ Table: `price_history` (id, search_term, product_title, price_mad, unit, image_u
 
 | Method | Path                        | Notes |
 |--------|-----------------------------|-------|
+| GET    | /api/prices/categories        | One row per distinct `search_term` actually present in `price_history` (`search_term`, `image_url` from the most recent scrape), for the category tile strip in the Prices tab. Registered before `/:term`. |
+| GET    | /api/prices/suggest?term=    | Autocomplete: up to 8 products whose `product_title` has a word starting with `term` (prefix match, not whole-word). Returns `product_title`, `price_mad`, `unit` only. Empty array if `term` is under 2 chars. Registered before `/:term` so the static path isn't shadowed. |
 | GET    | /api/prices/:term            | Most recent row per distinct `product_title` matching `:term` (via `DISTINCT ON`). |
 | GET    | /api/prices/:term/history     | All rows matching `:term`, ordered by `scraped_at ASC`, for charting. |
 
-Matching (both endpoints): `ILIKE` partial match against **both** `search_term`
-and `product_title` — a term can match the scrape category label or an
-individual product's name. The term is also expanded through a curated
-English/French grocery synonym list (`backend/src/utils/groceryTranslations.js`)
-before matching, e.g. searching "milk" also tries "lait" and vice versa,
-since bringo.ma's own data is French.
+Matching (`:term` endpoints): `ILIKE`-equivalent whole-word match against
+**both** `search_term` and `product_title` — a term can match the scrape
+category label or an individual product's name. The term is also expanded
+through a curated English/French grocery synonym list
+(`backend/src/utils/groceryTranslations.js`) before matching, e.g. searching
+"milk" also tries "lait" and vice versa, since bringo.ma's own data is
+French. `/suggest` deliberately skips synonym expansion and whole-word
+boundaries so it works as the user is still typing.
 
 ## Error handling conventions
 

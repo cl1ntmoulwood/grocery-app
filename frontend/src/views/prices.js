@@ -1,13 +1,34 @@
 import { pricesApi } from "../api.js";
 import { showError } from "../toast.js";
 import { renderPriceChart } from "../priceChart.js";
+import { t } from "../i18n.js";
 
 let state = {
   term: "",
   results: [],
   searched: false,
   expanded: null, // product_title currently showing history
+  categories: [],
+  activeCategory: null,
 };
+
+const SEARCH_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>';
+
+// Known bringo.ma category slugs get a real display name from i18n
+// (pr.cat.*, see i18n.js) since naively title-casing the slug reads badly
+// (e.g. "eaux-boissons" -> "Eaux Boissons" instead of "Water & Soft
+// Drinks"). Falls back to title-casing the raw slug for anything not in
+// that list, so an unrecognized/future category still gets a label
+// instead of breaking.
+function prettifyCategory(term) {
+  const known = t(`pr.cat.${term}`);
+  if (known !== `pr.cat.${term}`) return known;
+  return term
+    .split("-")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
 
 function escapeHtml(str) {
   const div = document.createElement("div");
@@ -18,58 +39,87 @@ function escapeHtml(str) {
 function timeAgo(iso) {
   const diffMs = Date.now() - new Date(iso).getTime();
   const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  if (days <= 0) return "today";
-  if (days === 1) return "yesterday";
-  if (days < 30) return `${days} days ago`;
+  if (days <= 0) return t("pr.today");
+  if (days === 1) return t("pr.yesterday");
+  if (days < 30) return t("pr.daysAgo", { days });
   return new Date(iso).toLocaleDateString();
 }
 
-function resultCardHtml(item) {
+function categoryTileHtml(cat) {
+  const isActive = state.activeCategory === cat.search_term;
   return `
-    <div class="card" data-title="${escapeHtml(item.product_title)}">
-      <div class="card-row">
-        ${item.image_url ? `<img src="${escapeHtml(item.image_url)}" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:8px" />` : ""}
-        <div style="flex:1">
-          <div class="card-title">${escapeHtml(item.product_title)}</div>
-          <div class="card-meta">
-            ${item.price_mad} MAD${item.unit ? ` / ${escapeHtml(item.unit)}` : ""}
-            &middot; as of ${timeAgo(item.scraped_at)}
-            ${item.product_url ? ` &middot; <a href="${escapeHtml(item.product_url)}" target="_blank" rel="noopener">view listing</a>` : ""}
-          </div>
+    <button type="button" class="price-category-tile ${isActive ? "is-active" : ""}" data-term="${escapeHtml(cat.search_term)}">
+      ${
+        cat.image_url
+          ? `<img src="${escapeHtml(cat.image_url)}" alt="" />`
+          : '<span class="price-category-tile-placeholder"></span>'
+      }
+      <span>${escapeHtml(prettifyCategory(cat.search_term))}</span>
+    </button>
+  `;
+}
+
+function resultTileHtml(item) {
+  return `
+    <div class="price-tile" data-title="${escapeHtml(item.product_title)}">
+      ${
+        item.image_url
+          ? `<img class="price-tile-image" src="${escapeHtml(item.image_url)}" alt="" />`
+          : '<div class="price-tile-image price-tile-image-placeholder"></div>'
+      }
+      <div class="price-tile-body">
+        <div class="price-tile-title">${escapeHtml(item.product_title)}</div>
+        <div class="price-tile-price">${item.price_mad} MAD${item.unit ? ` <span class="price-tile-unit">/ ${escapeHtml(item.unit)}</span>` : ""}</div>
+        <div class="price-tile-meta">
+          ${t("pr.asOf", { time: timeAgo(item.scraped_at) })}
+          ${item.product_url ? ` &middot; <a href="${escapeHtml(item.product_url)}" target="_blank" rel="noopener">${t("pr.viewListing")}</a>` : ""}
         </div>
-        <button class="btn btn-sm" data-action="toggle-history">History</button>
+        <div class="price-tile-actions">
+          <button class="btn btn-sm" data-action="toggle-history">${t("pr.history")}</button>
+        </div>
+        <div class="price-history-panel" style="display:none;margin-top:0.5rem"></div>
       </div>
-      <div class="price-history-panel" style="display:none;margin-top:0.75rem"></div>
     </div>
   `;
 }
 
 function template() {
   return `
-    <form class="card" id="prices-search-form">
-      <div class="section-title">Search local prices</div>
-      <div class="form-row">
-        <input type="text" name="term" placeholder="e.g. Lait" value="${escapeHtml(state.term)}" required />
-        <button class="btn btn-primary" type="submit" style="flex:0 0 auto">Search</button>
+    <form class="price-search-form" id="prices-search-form">
+      <div class="price-search-bar">
+        ${SEARCH_ICON}
+        <input type="text" name="term" placeholder="${t("pr.searchPlaceholder")}" value="${escapeHtml(state.term)}" required />
       </div>
+      <button class="btn btn-primary" type="submit">${t("pr.search")}</button>
     </form>
+
+    ${
+      state.categories.length
+        ? `<div class="price-categories">${state.categories.map(categoryTileHtml).join("")}</div>`
+        : ""
+    }
 
     <div id="prices-results">
       ${
         !state.searched
-          ? '<div class="empty-state">Search for a grocery item to see tracked prices.</div>'
+          ? `<div class="empty-state">${t("pr.emptyPrompt")}</div>`
           : state.results.length
-            ? state.results.map(resultCardHtml).join("")
-            : `<div class="empty-state">
-                No price data yet for "${escapeHtml(state.term)}". The price scraper hasn't collected this item yet
-                — check back once it's run.
-              </div>`
+            ? `<div class="price-grid">${state.results.map(resultTileHtml).join("")}</div>`
+            : `<div class="empty-state">${t("pr.noData", { term: escapeHtml(state.term) })}</div>`
       }
     </div>
   `;
 }
 
 export async function render(container) {
+  container.innerHTML = template();
+  wireEvents(container);
+  try {
+    state.categories = await pricesApi.categories();
+  } catch (err) {
+    showError(err);
+    return;
+  }
   container.innerHTML = template();
   wireEvents(container);
 }
@@ -91,10 +141,20 @@ function wireEvents(container) {
   container.querySelector("#prices-search-form").addEventListener("submit", (e) => {
     e.preventDefault();
     state.term = e.target.term.value.trim();
+    state.activeCategory = null;
     if (state.term) search(container);
   });
 
-  container.querySelectorAll(".card[data-title]").forEach((card) => {
+  container.querySelectorAll(".price-category-tile").forEach((tile) => {
+    tile.addEventListener("click", () => {
+      const term = tile.dataset.term;
+      state.term = term;
+      state.activeCategory = term;
+      search(container);
+    });
+  });
+
+  container.querySelectorAll(".price-tile[data-title]").forEach((card) => {
     const title = card.dataset.title;
     const panel = card.querySelector(".price-history-panel");
     const btn = card.querySelector('[data-action="toggle-history"]');
@@ -103,13 +163,13 @@ function wireEvents(container) {
       const isOpen = panel.style.display !== "none";
       if (isOpen) {
         panel.style.display = "none";
-        btn.textContent = "History";
+        btn.textContent = t("pr.history");
         return;
       }
 
       panel.style.display = "block";
-      panel.innerHTML = '<div class="empty-state">Loading…</div>';
-      btn.textContent = "Hide";
+      panel.innerHTML = `<div class="empty-state">${t("common.loading")}</div>`;
+      btn.textContent = t("pr.hide");
 
       try {
         const history = await pricesApi.history(state.term);
@@ -120,7 +180,7 @@ function wireEvents(container) {
         renderPriceChart(panel, points, { title });
       } catch (err) {
         showError(err);
-        panel.innerHTML = '<div class="empty-state">Could not load history.</div>';
+        panel.innerHTML = `<div class="empty-state">${t("pr.loadError")}</div>`;
       }
     });
   });

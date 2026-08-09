@@ -9,6 +9,7 @@ const SYNONYM_GROUPS = [
   ["water", "eau", "eaux"],
   ["fruit", "fruits"],
   ["vegetable", "vegetables", "legume", "legumes", "légume", "légumes"],
+  ["potato", "potatoes", "patate", "patates", "pomme de terre", "pommes de terre"],
   ["oil", "oils", "huile", "huiles"],
   ["dairy", "laitier", "laitiers"],
   ["egg", "eggs", "oeuf", "oeufs", "œuf", "œufs"],

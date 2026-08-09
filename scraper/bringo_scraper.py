@@ -12,6 +12,12 @@ Usage:
     python bringo_scraper.py "LAIT UHT" --category produits-laitiers-oeufs-8
     python bringo_scraper.py "LAIT" --category produits-laitiers-oeufs-8 \
         --store carrefour-supermarket-market-yaacoub-al-mansour --max-pages 2
+    python bringo_scraper.py --store carrefour-hypermarket-carrefour-sidi-maarouf \
+        --all-categories
+        (sweeps every known top-level category for that store in one run —
+        see STORE_CATEGORIES. Run once per store to cover all 4 verified
+        Carrefour branches; results pool together in price_history since
+        category labels are canonicalized the same way regardless of store.)
 
 Requires DATABASE_URL in the environment or a local .env file, e.g.:
     DATABASE_URL=postgres://pantry:pantry@localhost:5432/pantry
@@ -52,9 +58,15 @@ WHAT'S STILL UNVERIFIED:
     browsing bringo.ma yourself and copying the URL segment after
     `/store/{store}/`, or from the category sitemap:
         https://bringo.ma/sitemaps/sitemaps-generic/sitemap-generic-category-ma.xml
-  - Only one store branch (carrefour-supermarket-market-yaacoub-al-mansour)
-    was tested. Other store slugs (from the store sitemap) are assumed to
-    follow the same URL shape but weren't individually verified.
+  - Beyond the original branch (carrefour-supermarket-market-yaacoub-al-
+    mansour), three more branches were individually verified the same way
+    (real request, product cards confirmed present): carrefour-express-
+    express-val-fleury, carrefour-supermarket-gourmet-velodrome, and
+    carrefour-hypermarket-carrefour-sidi-maarouf. Their top-level category
+    slug+id lists are in STORE_CATEGORIES below — each store *format*
+    (express/supermarket/hypermarket) has its own category IDs, so the
+    same logical category (e.g. dairy) has a different numeric suffix per
+    format. Other, unlisted store slugs are still unverified.
 ===============================================================================
 """
 
@@ -85,6 +97,297 @@ DEFAULT_STORE = "carrefour-supermarket-market-yaacoub-al-mansour"
 
 # Confirmed working shape: /fr_MA/store/{store}/{category}?criteria[search][value]={term}
 SEARCH_URL_TEMPLATE = f"{BASE_URL}/fr_MA/store/{{store}}/{{category}}"
+
+# Per-store category slug+id lists, for --all-categories: each store
+# format's 13-18 top-level departments (e.g. "produits-laitiers-oeufs-8")
+# PLUS their direct subcategories (e.g. "beurres", "fromages-4",
+# "lait-oeufs"), two levels deep. Each store format (express/supermarket/
+# hypermarket) has its own category IDs in bringo's catalog, so the same
+# logical (sub)category shows up under a different numeric suffix per
+# format — e.g. "produits-laitiers-oeufs-8" (supermarket) vs "-9"
+# (hypermarket) vs "-11" (express), and some subcategory slugs have no
+# numeric suffix at all (e.g. "beurres" on supermarket). These were
+# discovered from each department's own product-listing page (the
+# "bringo-product-listing-category-menu" nav block lists both sibling
+# departments and the current department's children) and individually
+# verified — sampled slugs from each list were confirmed to return real
+# product cards, not guessed. See the module docstring for the general
+# caveat about category IDs, and robots.txt's Disallow on *?page= and
+# *?limit= for why this stops at page 1 / no --max-pages bump rather than
+# also paginating within each (sub)category.
+#
+# "carrefour-supermarket-gourmet-velodrome" is a supermarket-format branch
+# (despite the "gourmet" in its name) and was confirmed to use the exact
+# same category IDs as the other supermarket branch, so it reuses the list
+# below rather than duplicating it.
+_SUPERMARKET_CATEGORIES = [
+    "accessoires-de-menage-25",
+    "alimentation-bebe",
+    "animaux-4",
+    "art-de-table-79",
+    "barres-cereales-proteinees-1",
+    "beurres",
+    "biscuits-16",
+    "boissons-24",
+    "bonbons-chewings-gum-1",
+    "boucherie-28",
+    "boulangerie-27",
+    "boulangerie-patisserie",
+    "cereales-40",
+    "cereales-biscuits-confiseries-1",
+    "charcuterie-1",
+    "charcuterie-74",
+    "charcuterie-a-la-coupe-26",
+    "chats-27",
+    "chiens-35",
+    "chocolats-9",
+    "conserves-bocaux-1",
+    "couches-bebe-28",
+    "cremes-preparations-culinaires",
+    "desodorisants-incecticides",
+    "eaux-55",
+    "eaux-boissons-12",
+    "emballages-menagers-essuie-tout",
+    "enfants",
+    "entretien-nettoyage-14",
+    "epicerie-4",
+    "farines-preparation-patisserie-1",
+    "fromages-4",
+    "fromages-a-la-coupe-36",
+    "fruits-44",
+    "fruits-secs-8",
+    "glaces-59",
+    "glaces-surgele-4",
+    "hommes",
+    "huiles-4",
+    "hygiene-beaute-12",
+    "hygiene-dentaire",
+    "hygiene-intime",
+    "hygiene-soin-1",
+    "jus-19",
+    "lait-oeufs",
+    "legumes-43",
+    "lessives-soin-du-linge",
+    "ma-cuisine-12",
+    "maquillage",
+    "monde-bebe",
+    "mon-marche-7",
+    "papier-toilette-mouchoirs",
+    "pates-riz-feculents-1",
+    "patisserie-21",
+    "petit-dejeuner-128",
+    "poissonnerie-59",
+    "premiers-soins-preservatifs",
+    "produits-laitiers-oeufs-8",
+    "produits-nettoyants",
+    "produits-solaires-auto-bronzants",
+    "sauces-chaudes-1",
+    "sauces-froides-1",
+    "saveurs-du-monde-1",
+    "sel-epices-bouillons-1",
+    "sirops-28",
+    "snacking-sale-63",
+    "soins-des-cheveux",
+    "soins-du-corps-56",
+    "soins-du-visage-63",
+    "soupes-croutons-chapelure-1",
+    "sucres-1",
+    "surgele-75",
+    "thes-boissons-glacees-5",
+    "tout-pour-votre-cuisine-3",
+    "vinaigres-condiments-1",
+    "volaille-21",
+    "yaourts-desserts-3",
+]
+
+STORE_CATEGORIES = {
+    "carrefour-express-express-val-fleury": [
+        "accessoires-de-menage-28",
+        "alimentation-bebe-3",
+        "animaux-8",
+        "barres-cereales-proteinees",
+        "beurres-2",
+        "biscuits-19",
+        "boissons-26",
+        "bonbons-chewings-gum-2",
+        "boulangerie-32",
+        "boulangerie-patisserie-3",
+        "cereales-44",
+        "cereales-biscuits-confiseries-2",
+        "charcuterie-71",
+        "charcuterie-73",
+        "charcuterie-a-la-coupe-28",
+        "chats-32",
+        "chiens-40",
+        "chocolats-10",
+        "conserves-bocaux-3",
+        "couches-bebe-31",
+        "cremes-preparations-culinaires-2",
+        "desodorisants-incecticides-2",
+        "eaux-62",
+        "eaux-boissons-13",
+        "emballages-menagers-essuie-tout-2",
+        "enfants-3",
+        "entretien-nettoyage-17",
+        "epicerie-137",
+        "farines-preparation-patisserie-3",
+        "fromages-7",
+        "fromages-a-la-coupe-41",
+        "fruits-53",
+        "fruits-secs-50",
+        "glaces-67",
+        "glaces-surgele-6",
+        "hommes-2",
+        "huiles-46",
+        "hygiene-beaute-14",
+        "hygiene-dentaire-3",
+        "hygiene-intime-2",
+        "hygiene-soin-2",
+        "jus-22",
+        "lait-oeufs-2",
+        "legumes-50",
+        "monde-bebe-3",
+        "mon-marche-10",
+        "papier-toilette-mouchoirs-2",
+        "pates-riz-feculents-3",
+        "petit-dejeuner-143",
+        "poissonnerie-64",
+        "premiers-soins-preservatifs-3",
+        "produits-laitiers-oeufs-11",
+        "produits-nettoyants-2",
+        "produits-solaires-auto-bronzants-2",
+        "sauces-chaudes-3",
+        "sauces-froides-3",
+        "saveurs-du-monde-3",
+        "sel-epices-bouillons-3",
+        "sirops-36",
+        "snacking-sale-67",
+        "soins-des-cheveux-2",
+        "soins-du-corps-61",
+        "soins-du-visage-70",
+        "soupes-croutons-chapelure-3",
+        "sucres-22",
+        "surgele-82",
+        "thes-boissons-glacees-8",
+        "vinaigres-condiments-3",
+        "volaille-25",
+        "yaourts-desserts-6",
+    ],
+    "carrefour-supermarket-market-yaacoub-al-mansour": _SUPERMARKET_CATEGORIES,
+    "carrefour-supermarket-gourmet-velodrome": _SUPERMARKET_CATEGORIES,
+    "carrefour-hypermarket-carrefour-sidi-maarouf": [
+        "accessoires-de-menage-26",
+        "alimentation-bebe-1",
+        "ampoules-piles-multiprises-1",
+        "animaux-5",
+        "appareils-de-coiffure-1",
+        "appareils-de-cuisson-35",
+        "art-de-table-81",
+        "audio-son-2",
+        "auto-moto-bricolage-1",
+        "bagagerie-25",
+        "barres-cereales-proteinees-2",
+        "beurres-1",
+        "biscuits-14",
+        "boissons-23",
+        "bonbons-chewings-gum",
+        "boucherie-29",
+        "boulangerie-28",
+        "boulangerie-patisserie-1",
+        "cereales-39",
+        "cereales-biscuits-confiseries",
+        "charcuterie-3",
+        "charcuterie-75",
+        "charcuterie-a-la-coupe-27",
+        "chats-28",
+        "chauffages-ventilateurs-1",
+        "chiens-36",
+        "chocolats-8",
+        "claviers-souris-1",
+        "conserves-bocaux",
+        "couches-bebe-29",
+        "coupe-du-monde-1",
+        "cremes-preparations-culinaires-1",
+        "decoration-5",
+        "desodorisants-incecticides-1",
+        "droguerie-1",
+        "eaux-54",
+        "eaux-boissons-11",
+        "emballages-menagers-essuie-tout-1",
+        "enfants-1",
+        "entretien-de-la-maison-30",
+        "entretien-nettoyage-15",
+        "epicerie-9",
+        "farines-preparation-patisserie",
+        "fournitures-scolaires-29",
+        "fromages-5",
+        "fromages-a-la-coupe-37",
+        "fruits-46",
+        "fruits-secs-9",
+        "glaces-60",
+        "glaces-surgele-5",
+        "high-tech-multimedia",
+        "hommes-1",
+        "huiles-9",
+        "hygiene-beaute-13",
+        "hygiene-dentaire-1",
+        "hygiene-intime-1",
+        "hygiene-soin",
+        "jardin-amenagement-dexterieur",
+        "jouets-25",
+        "jus-18",
+        "kasa-by-carrefour-5",
+        "kasa-by-carrefour-6",
+        "lait-oeufs-1",
+        "legumes-45",
+        "lessives-soin-du-linge-1",
+        "librairie-jouets-1",
+        "linge-de-lit-26",
+        "ma-cuisine-13",
+        "ma-maison-2",
+        "maquillage-1",
+        "monde-bebe-1",
+        "mon-marche-8",
+        "objets-connectes-6",
+        "papier-toilette-mouchoirs-1",
+        "pates-riz-feculents",
+        "patisserie-22",
+        "pese-personne-balance-connectee-9",
+        "petit-dejeuner-127",
+        "petit-dejeuner-130",
+        "plateaux-de-fromages",
+        "poissonnerie-60",
+        "premiers-soins-preservatifs-1",
+        "preparation-culinaire-34",
+        "produits-laitiers-oeufs-9",
+        "produits-nettoyants-1",
+        "produits-solaires-auto-bronzants-1",
+        "sauces-chaudes",
+        "sauces-froides",
+        "saveurs-du-monde",
+        "sel-epices-bouillons",
+        "sirops-27",
+        "snacking-sale-62",
+        "soins-des-cheveux-1",
+        "soins-du-corps-57",
+        "soins-du-visage-64",
+        "soupes-croutons-chapelure",
+        "stockage-informatique-6",
+        "sucres-3",
+        "surgele-76",
+        "textiles-de-bain-1",
+        "thes-boissons-glacees-4",
+        "tout-pour-votre-cuisine-4",
+        "vetements-accessoires-bebe",
+        "vetements-enfants-1",
+        "vetements-femme-7",
+        "vetements-homme-7",
+        "vetements-textile-1",
+        "vinaigres-condiments",
+        "volaille-22",
+        "yaourts-desserts-4",
+    ],
+}
 
 SELECTORS = {
     "product_card": "div.box-product",
@@ -379,17 +682,27 @@ def main() -> int:
     )
     parser.add_argument(
         "--category",
-        required=True,
         help=(
-            "Category slug+id, e.g. produits-laitiers-oeufs-8 — required, there is no "
-            "site-wide search. Find it by browsing bringo.ma and copying the URL segment "
-            "after /store/{store}/, or from the category sitemap (see docstring)."
+            "Category slug+id, e.g. produits-laitiers-oeufs-8 — required unless "
+            "--all-categories is given, there is no site-wide search. Find it by "
+            "browsing bringo.ma and copying the URL segment after /store/{store}/, "
+            "or from the category sitemap (see docstring)."
+        ),
+    )
+    parser.add_argument(
+        "--all-categories",
+        action="store_true",
+        help=(
+            "Sweep every known top-level category for --store (see STORE_CATEGORIES) "
+            "in one run instead of a single --category. Mutually exclusive with "
+            "--category. Only works for the 4 stores listed in STORE_CATEGORIES."
         ),
     )
     parser.add_argument(
         "--store",
         default=DEFAULT_STORE,
-        help=f"Store slug (default: {DEFAULT_STORE}). Only this one has been verified.",
+        help=f"Store slug (default: {DEFAULT_STORE}). Verified stores: "
+        f"{', '.join(STORE_CATEGORIES)}.",
     )
     parser.add_argument(
         "--max-pages",
@@ -401,7 +714,33 @@ def main() -> int:
     )
     args = parser.parse_args()
 
+    if args.all_categories == bool(args.category):
+        parser.error("Pass exactly one of --category or --all-categories.")
+
     search_term = args.search_term.strip() if args.search_term else None
+
+    if args.all_categories:
+        categories = STORE_CATEGORIES.get(args.store)
+        if not categories:
+            parser.error(
+                f"--all-categories has no known category list for store {args.store!r}. "
+                f"Known stores: {', '.join(STORE_CATEGORIES)}."
+            )
+        logger.info(
+            "Starting bringo.ma sweep: store=%r categories=%d term=%r",
+            args.store,
+            len(categories),
+            search_term or "(none — full category listings)",
+        )
+        total_inserted = 0
+        for i, category in enumerate(categories, start=1):
+            logger.info("[%d/%d] category=%r", i, len(categories), category)
+            products = scrape_search_results(args.store, category, search_term, max_pages=args.max_pages)
+            total_inserted += insert_price_rows(products)
+            if i < len(categories):
+                polite_sleep()
+        logger.info("Done. Inserted %d row(s) total across %d categories.", total_inserted, len(categories))
+        return 0
 
     logger.info(
         "Starting bringo.ma scrape: store=%r category=%r term=%r",

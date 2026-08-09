@@ -37,17 +37,55 @@ since the `db` hostname only resolves inside the docker-compose network.
 python bringo_scraper.py "LAIT UHT" --category produits-laitiers-oeufs-8
 python bringo_scraper.py "LAIT" --category produits-laitiers-oeufs-8 \
     --store carrefour-supermarket-market-yaacoub-al-mansour --max-pages 2
+
+# Sweep every known category (departments + their subcategories) for one
+# store in a single run:
+python bringo_scraper.py --store carrefour-hypermarket-carrefour-sidi-maarouf \
+    --all-categories
 ```
 
-`--category` is **required** — see "How search actually works" below.
-`--store` defaults to `carrefour-supermarket-market-yaacoub-al-mansour`
-(the only branch verified so far).
+Pass exactly one of `--category` (a single category) or `--all-categories`
+(every category known for `--store`, see `STORE_CATEGORIES` in the script)
+— see "How search actually works" below. `--store` defaults to
+`carrefour-supermarket-market-yaacoub-al-mansour`.
+
+Four branches are verified and covered by `STORE_CATEGORIES`, so results
+pool together into one combined catalog for the Prices tab. Each store's
+list covers its top-level departments *and* their direct subcategories
+(two levels deep — e.g. Dairy's children like Butters, Cheeses, Milk &
+Eggs), discovered from each department's own category-menu nav:
+
+| Store slug | Format | Categories |
+| --- | --- | --- |
+| `carrefour-express-express-val-fleury` | Express | 70 |
+| `carrefour-supermarket-market-yaacoub-al-mansour` | Supermarket | 77 |
+| `carrefour-supermarket-gourmet-velodrome` | Supermarket | 77 |
+| `carrefour-hypermarket-carrefour-sidi-maarouf` | Hypermarket | 110 |
+
+This is not literally every leaf category on the site (bringo.ma's full
+site-wide category sitemap has 400+ entries) — going further than direct
+subcategories starts requiring per-branch ID discovery for each one
+individually, which is a much bigger and slower undertaking. Two levels
+deep already covers real department + subcategory browsing, which is what
+a shopper would actually navigate through.
+
+To cover all four, run `--all-categories` once per store slug above (there's
+intentionally no single "scrape every store" flag — see the category-ID
+caveat below on why each store's categories are scraped through its own
+`--store` value). Category *names* merge automatically: each store format
+uses its own numeric category ID (e.g. dairy is `produits-laitiers-oeufs-8`
+on supermarket branches but `-9` on hypermarket and `-11` on express), but
+the script strips that trailing `-<id>` to derive the stored `search_term`
+label, so the same logical category from different stores lands under the
+same label in `price_history` and shows as one merged tile in the Prices
+tab — no store column needed.
 
 Each run inserts one row per product found into `price_history`
 (search_term, product_title, price_mad, unit, image_url, product_url,
 scraped_at). The script rate-limits itself (a few seconds of random delay
-between requests) and caps pagination at a small hard limit — it is meant
-for occasional, low-volume personal use, not bulk crawling.
+between requests, and between categories in `--all-categories` mode) and
+caps pagination at a small hard limit — it is meant for occasional,
+low-volume personal use, not bulk crawling.
 
 ## How search actually works on bringo.ma (verified, not guessed)
 
@@ -92,10 +130,13 @@ You need the right category for whatever you want to track. Two ways:
   happens past the last page?) hasn't been directly observed. Keep
   `--max-pages` low; the script treats a page with zero product cards as
   "end of results," which is a safe stopping heuristic either way.
-- **Other store branches.** Only
-  `carrefour-supermarket-market-yaacoub-al-mansour` has been tested. Other
-  store slugs (from the store sitemap) are assumed to follow the same URL
-  shape but weren't individually verified.
+- **Other store branches.** The 4 branches in `STORE_CATEGORIES` (see
+  table above) have been individually tested. Other store slugs (from the
+  store sitemap) are assumed to follow the same URL shape but weren't
+  individually verified, and would need their own category ID list found
+  via their format's browse page (`/fr_MA/stores/{format}`, e.g.
+  `/fr_MA/stores/carrefour-hypermarket`) before `--all-categories` would
+  work for them.
 
 ### Parser correctness
 
