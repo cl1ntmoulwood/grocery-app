@@ -3,6 +3,31 @@ import { parseId, sendError } from "../utils/http.js";
 
 const UPDATABLE_FIELDS = ["name", "category", "quantity", "unit", "low_threshold"];
 
+// If an item is at or below its low_threshold, ensure it's on the shopping
+// list. Skips if an unpurchased row already exists for this item name
+// (from any source) so restocking the same item repeatedly doesn't create
+// duplicates. Best-effort: a failure here never fails the inventory
+// write itself.
+async function syncLowStockToShoppingList(item, logger) {
+  if (Number(item.quantity) > Number(item.low_threshold)) return;
+
+  try {
+    const existing = await pool.query(
+      `SELECT id FROM shopping_list WHERE lower(item_name) = lower($1) AND is_purchased = false`,
+      [item.name]
+    );
+    if (existing.rows.length > 0) return;
+
+    await pool.query(
+      `INSERT INTO shopping_list (item_name, quantity_needed, unit, source)
+       VALUES ($1, $2, $3, 'low_stock')`,
+      [item.name, item.low_threshold, item.unit]
+    );
+  } catch (err) {
+    logger.error(err, "Failed to sync low-stock item to shopping list");
+  }
+}
+
 export default async function inventoryRoutes(fastify) {
   fastify.get("/inventory", async (request, reply) => {
     const { category } = request.query;
@@ -70,6 +95,7 @@ export default async function inventoryRoutes(fastify) {
          RETURNING *`,
         [name, category ?? null, quantity, unit ?? null, low_threshold ?? null]
       );
+      await syncLowStockToShoppingList(result.rows[0], request.log);
       return reply.code(201).send(result.rows[0]);
     } catch (err) {
       request.log.error(err);
@@ -97,6 +123,7 @@ export default async function inventoryRoutes(fastify) {
         [...values, id]
       );
       if (result.rows.length === 0) return sendError(reply, 404, "Inventory item not found");
+      await syncLowStockToShoppingList(result.rows[0], request.log);
       return result.rows[0];
     } catch (err) {
       request.log.error(err);

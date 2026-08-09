@@ -38,6 +38,13 @@ Table: `inventory_items` (id, name, category, quantity, unit, low_threshold, upd
 Note: `/api/inventory/low-stock` must be registered before `/api/inventory/:id`
 so it isn't shadowed by the param route.
 
+**Auto shopping-list sync**: after every POST/PUT, if the resulting item has
+`quantity <= low_threshold`, a `shopping_list` row is created automatically
+(`source = 'low_stock'`, `quantity_needed = low_threshold`), unless an
+unpurchased row for that item name already exists (any source) — prevents
+duplicates on repeated low-stock updates. Best-effort: failure here never
+fails the inventory write itself.
+
 ## Recipes
 
 Tables: `recipes` (id, title, instructions, servings, created_at),

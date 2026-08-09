@@ -13,6 +13,16 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+function sourceLabel(source) {
+  return source === "low_stock" ? "low stock" : source;
+}
+
+function sourceBadgeClass(source) {
+  if (source === "recipe") return "badge-ok";
+  if (source === "low_stock") return "badge-warning";
+  return "badge";
+}
+
 async function loadItems() {
   const purchased = state.filter === "all" ? undefined : state.filter === "purchased";
   const [items, estimate] = await Promise.all([
@@ -35,7 +45,7 @@ function itemRowHtml(item) {
             </div>
             <div class="card-meta">
               ${item.quantity_needed ?? "?"} ${escapeHtml(item.unit || "")}
-              &middot; <span class="badge ${item.source === "recipe" ? "badge-ok" : "badge-warning"}">${item.source}</span>
+              &middot; <span class="badge ${sourceBadgeClass(item.source)}">${escapeHtml(sourceLabel(item.source))}</span>
               ${item.estimated_price_mad != null ? `&middot; ${item.estimated_price_mad} MAD` : ""}
             </div>
           </div>
