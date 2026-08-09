@@ -1,20 +1,36 @@
 import "dotenv/config";
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import cookie from "@fastify/cookie";
 import { migrate } from "./db/migrate.js";
 import inventoryRoutes from "./routes/inventory.js";
 import recipesRoutes from "./routes/recipes.js";
 import shoppingListRoutes from "./routes/shoppingList.js";
 import pricesRoutes from "./routes/prices.js";
+import authRoutes from "./routes/auth.js";
+import { requireAuth } from "./utils/authGuard.js";
+
+if (!process.env.COOKIE_SECRET) {
+  throw new Error("COOKIE_SECRET environment variable is not set");
+}
 
 const fastify = Fastify({ logger: true });
 
-await fastify.register(cors, { origin: true });
+await fastify.register(cors, { origin: true, credentials: true });
+await fastify.register(cookie, { secret: process.env.COOKIE_SECRET });
 
-await fastify.register(inventoryRoutes, { prefix: "/api" });
-await fastify.register(recipesRoutes, { prefix: "/api" });
-await fastify.register(shoppingListRoutes, { prefix: "/api" });
-await fastify.register(pricesRoutes, { prefix: "/api" });
+await fastify.register(authRoutes, { prefix: "/api/auth" });
+
+// Every pantry-data route requires a logged-in household with an active
+// profile — wrapping the existing route files in this encapsulated context
+// adds the guard without modifying any of them.
+await fastify.register(async (protectedApi) => {
+  protectedApi.addHook("preHandler", requireAuth);
+  await protectedApi.register(inventoryRoutes, { prefix: "/api" });
+  await protectedApi.register(recipesRoutes, { prefix: "/api" });
+  await protectedApi.register(shoppingListRoutes, { prefix: "/api" });
+  await protectedApi.register(pricesRoutes, { prefix: "/api" });
+});
 
 try {
   await migrate();

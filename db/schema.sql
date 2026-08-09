@@ -68,3 +68,27 @@ CREATE TABLE IF NOT EXISTS price_history (
 
 CREATE INDEX IF NOT EXISTS idx_price_history_search_term ON price_history (search_term);
 CREATE INDEX IF NOT EXISTS idx_price_history_search_term_scraped_at ON price_history (search_term, scraped_at);
+
+-- One household per self-hosted deployment (not multi-tenant) shares a
+-- single login; each family member then picks their own profile.
+CREATE TABLE IF NOT EXISTS households (
+    id             SERIAL PRIMARY KEY,
+    name           TEXT NOT NULL,
+    login_id       TEXT NOT NULL UNIQUE,
+    password_hash  TEXT NOT NULL,
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS profiles (
+    id            SERIAL PRIMARY KEY,
+    household_id  INTEGER NOT NULL REFERENCES households(id) ON DELETE CASCADE,
+    name          TEXT NOT NULL,
+    avatar_emoji  TEXT NOT NULL DEFAULT '🙂',
+    avatar_color  TEXT NOT NULL DEFAULT '#1f6f76',
+    pin_hash      TEXT,
+    role          TEXT NOT NULL DEFAULT 'member' CHECK (role IN ('admin', 'member')),
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (household_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_profiles_household_id ON profiles (household_id);

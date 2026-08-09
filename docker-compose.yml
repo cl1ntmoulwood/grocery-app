@@ -22,6 +22,7 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgres://pantry:pantry@db:5432/pantry
+      COOKIE_SECRET: c7f76b5daac7db3c1cbb08ef44d0a9f032c437d8dde5576122ff1dea665c34b6
     ports:
       - "3000:3000"
     volumes:

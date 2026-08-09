@@ -9,10 +9,15 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <title>Family Pantry & Price Tracker</title>
   </head>
-  <body>
+  <body class="pre-auth">
     <header class="app-header">
       <div class="app-header-top">
         <h1 class="logo">courses<span class="logo-accent">.home</span></h1>
+        <div class="user-menu" id="user-menu" hidden>
+          <span class="user-menu-profile" id="user-menu-profile"></span>
+          <button type="button" class="btn btn-sm" id="switch-profile-btn" data-i18n="auth.switchProfile">Switch profile</button>
+          <button type="button" class="btn btn-sm" id="logout-btn" data-i18n="auth.logOut">Log out</button>
+        </div>
         <div class="lang-toggle" id="lang-toggle">
           <button type="button" data-lang="en" class="is-active">EN</button>
           <button type="button" data-lang="fr">FR</button>

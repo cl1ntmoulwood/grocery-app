@@ -10,9 +10,13 @@ class ApiError extends Error {
 }
 
 async function request(path, options = {}) {
+  // Only set Content-Type when there's actually a body — Fastify's JSON
+  // body parser rejects an application/json request with an empty body
+  // (used by bodyless POSTs like logout/switch-profile) with a 400.
+  const headers = options.body ? { "Content-Type": "application/json" } : {};
   const response = await fetch(path, {
-    headers: { "Content-Type": "application/json" },
     ...options,
+    headers: { ...headers, ...options.headers },
   });
 
   if (response.status === 204) return null;
@@ -69,6 +73,17 @@ export const pricesApi = {
   history: (term) => request(`/api/prices/${encodeURIComponent(term)}/history`),
   suggest: (term) => request(`/api/prices/suggest?term=${encodeURIComponent(term)}`),
   categories: () => request("/api/prices/categories"),
+};
+
+export const authApi = {
+  getSession: () => request("/api/auth/session"),
+  register: (data) => request("/api/auth/register", { method: "POST", ...json(data) }),
+  login: (data) => request("/api/auth/login", { method: "POST", ...json(data) }),
+  logout: () => request("/api/auth/logout", { method: "POST" }),
+  listProfiles: () => request("/api/auth/profiles"),
+  createProfile: (data) => request("/api/auth/profiles", { method: "POST", ...json(data) }),
+  selectProfile: (id, pin) => request(`/api/auth/profiles/${id}/select`, { method: "POST", ...json({ pin }) }),
+  switchProfile: () => request("/api/auth/switch-profile", { method: "POST" }),
 };
 
 export { ApiError };
