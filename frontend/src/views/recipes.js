@@ -15,6 +15,9 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+const PRINT_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>';
+
 function statusBadge(status) {
   const cls = status === "ok" ? "badge-ok" : status === "insufficient" ? "badge-warning" : "badge-danger";
   return `<span class="badge ${cls}">${status.replace("_", " ")}</span>`;
@@ -84,17 +87,30 @@ async function openDetail(container, id) {
   renderView(container);
 }
 
+function printRecipeHtml(r) {
+  return `
+    <div class="print-only">
+      <h2>${escapeHtml(r.title)}</h2>
+      ${r.servings ? `<div>${escapeHtml(t("rec.servings", { count: r.servings }))}</div>` : ""}
+      <ul class="print-list">
+        ${r.ingredients.map((ing) => `<li><span>${escapeHtml(ing.ingredient_name)} — ${ing.quantity_needed} ${escapeHtml(ing.unit || "")}</span></li>`).join("")}
+      </ul>
+      ${r.instructions ? `<p>${escapeHtml(r.instructions)}</p>` : ""}
+    </div>
+  `;
+}
+
 function detailTemplate() {
   const r = state.detail;
   return `
-    <button class="link-btn" id="rec-back-btn">${t("rec.back")}</button>
-    <div class="card" style="margin-top:0.5rem">
+    <button class="link-btn no-print" id="rec-back-btn">${t("rec.back")}</button>
+    <div class="card no-print" style="margin-top:0.5rem">
       <div class="card-title" style="font-size:1.2rem">${escapeHtml(r.title)}</div>
       <div class="card-meta">${r.servings ? t("rec.servings", { count: r.servings }) : ""}</div>
       ${r.instructions ? `<p>${escapeHtml(r.instructions)}</p>` : ""}
     </div>
 
-    <div class="card">
+    <div class="card no-print">
       <div class="section-title">${t("rec.ingredients")}</div>
       ${
         r.ingredients.length
@@ -113,11 +129,14 @@ function detailTemplate() {
       }
     </div>
 
-    <div class="card-row" style="gap:0.5rem">
+    <div class="card-row no-print" style="gap:0.5rem">
       <button class="btn" id="rec-check-btn">${t("rec.checkInventory")}</button>
       <button class="btn" id="rec-genlist-btn">${t("rec.addMissing")}</button>
+      <button class="btn" id="rec-print-btn">${PRINT_ICON}<span>${t("common.print")}</span></button>
       <button class="btn btn-danger" id="rec-delete-btn">${t("rec.deleteRecipe")}</button>
     </div>
+
+    ${printRecipeHtml(r)}
   `;
 }
 
@@ -126,6 +145,8 @@ function wireDetailEvents(container) {
     state.mode = "list";
     renderView(container);
   });
+
+  container.querySelector("#rec-print-btn").addEventListener("click", () => window.print());
 
   container.querySelector("#rec-check-btn").addEventListener("click", async () => {
     try {

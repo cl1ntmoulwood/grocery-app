@@ -29,6 +29,9 @@ const ALERT_ICON =
 const PLUS_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>';
 
+const PRINT_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>';
+
 function isLowStock(item) {
   return Number(item.quantity) <= Number(item.low_threshold);
 }
@@ -93,10 +96,29 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+function printListHtml() {
+  return `
+    <div class="print-only">
+      <h2>${t("nav.inventory")}</h2>
+      <ul class="print-list">
+        ${state.items
+          .map(
+            (item) => `
+          <li>
+            <span>${escapeHtml(item.name)}${escapeHtml(item.category) ? ` (${escapeHtml(item.category)})` : ""} — ${item.quantity} ${escapeHtml(item.unit || "")}</span>
+          </li>
+        `
+          )
+          .join("")}
+      </ul>
+    </div>
+  `;
+}
+
 function template() {
   const cats = categoryOptions();
   return `
-    <div class="inv-toolbar">
+    <div class="inv-toolbar no-print">
       <select id="inv-category">
         <option value="">${t("inv.allCategories")}</option>
         ${cats.map((c) => `<option value="${escapeHtml(c)}" ${c === state.category ? "selected" : ""}>${escapeHtml(c)}</option>`).join("")}
@@ -108,9 +130,10 @@ function template() {
         </span>
         ${t("inv.lowStockOnly")}
       </label>
+      <button type="button" class="btn btn-sm" id="inv-print-btn">${PRINT_ICON}<span>${t("common.print")}</span></button>
     </div>
 
-    <form class="card" id="inv-add-form">
+    <form class="card no-print" id="inv-add-form">
       <div class="section-title">${t("common.addItem")}</div>
       <div class="form-row">
         <div><label>${t("common.name")}</label><input type="text" name="name" required /></div>
@@ -130,7 +153,7 @@ function template() {
       <button class="btn btn-primary" type="submit">${PLUS_ICON}<span>${t("common.addItem")}</span></button>
     </form>
 
-    <div id="inv-list">
+    <div id="inv-list" class="no-print">
       ${
         state.items.length
           ? `<div class="inv-list-header">
@@ -143,6 +166,8 @@ function template() {
           : `<div class="empty-state">${t("inv.empty")}</div>`
       }
     </div>
+
+    ${printListHtml()}
   `;
 }
 
@@ -178,6 +203,8 @@ function wireEvents(container) {
     state.lowStockOnly = e.target.checked;
     refresh(container);
   });
+
+  container.querySelector("#inv-print-btn").addEventListener("click", () => window.print());
 
   container.querySelector("#inv-add-form").addEventListener("submit", async (e) => {
     e.preventDefault();

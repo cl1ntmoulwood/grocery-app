@@ -853,3 +853,60 @@ body.pre-auth .sidebar {
   text-align: center;
   letter-spacing: 0.3em;
 }
+
+/* Printing: each view renders a hidden .print-only block alongside its
+   normal (screen) markup — simpler than maintaining a second template per
+   view, and keeps the print layout decoupled from on-screen interactive
+   state (editable inputs, filters, images) that doesn't belong on paper. */
+
+.print-only {
+  display: none;
+}
+
+.print-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.print-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid #ccc;
+}
+
+.print-checkbox {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid #000;
+  flex-shrink: 0;
+}
+
+@media print {
+  body {
+    background: #fff;
+    color: #000;
+  }
+
+  .app-header,
+  .sidebar,
+  .tabs,
+  #toast,
+  .no-print {
+    display: none !important;
+  }
+
+  .app-body {
+    display: block !important;
+  }
+
+  main#app {
+    max-width: none !important;
+  }
+
+  .print-only {
+    display: block;
+  }
+}

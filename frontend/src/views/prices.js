@@ -15,6 +15,9 @@ let state = {
 const SEARCH_ICON =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>';
 
+const PRINT_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>';
+
 // Known bringo.ma category slugs get a real display name from i18n
 // (pr.cat.*, see i18n.js) since naively title-casing the slug reads badly
 // (e.g. "eaux-boissons" -> "Eaux Boissons" instead of "Water & Soft
@@ -83,23 +86,44 @@ function resultTileHtml(item) {
   `;
 }
 
+function printResultsHtml() {
+  if (!state.results.length) return "";
+  return `
+    <div class="print-only">
+      <h2>${escapeHtml(state.term)}</h2>
+      <ul class="print-list">
+        ${state.results
+          .map(
+            (item) => `
+          <li>
+            <span>${escapeHtml(item.product_title)} — ${item.price_mad} MAD${item.unit ? ` / ${escapeHtml(item.unit)}` : ""}</span>
+          </li>
+        `
+          )
+          .join("")}
+      </ul>
+    </div>
+  `;
+}
+
 function template() {
   return `
-    <form class="price-search-form" id="prices-search-form">
+    <form class="price-search-form no-print" id="prices-search-form">
       <div class="price-search-bar">
         ${SEARCH_ICON}
         <input type="text" name="term" placeholder="${t("pr.searchPlaceholder")}" value="${escapeHtml(state.term)}" required />
       </div>
       <button class="btn btn-primary" type="submit">${t("pr.search")}</button>
+      ${state.results.length ? `<button type="button" class="btn btn-sm" id="prices-print-btn">${PRINT_ICON}<span>${t("common.print")}</span></button>` : ""}
     </form>
 
     ${
       state.categories.length
-        ? `<div class="price-categories">${state.categories.map(categoryTileHtml).join("")}</div>`
+        ? `<div class="price-categories no-print">${state.categories.map(categoryTileHtml).join("")}</div>`
         : ""
     }
 
-    <div id="prices-results">
+    <div id="prices-results" class="no-print">
       ${
         !state.searched
           ? `<div class="empty-state">${t("pr.emptyPrompt")}</div>`
@@ -108,6 +132,8 @@ function template() {
             : `<div class="empty-state">${t("pr.noData", { term: escapeHtml(state.term) })}</div>`
       }
     </div>
+
+    ${printResultsHtml()}
   `;
 }
 
@@ -144,6 +170,8 @@ function wireEvents(container) {
     state.activeCategory = null;
     if (state.term) search(container);
   });
+
+  container.querySelector("#prices-print-btn")?.addEventListener("click", () => window.print());
 
   container.querySelectorAll(".price-category-tile").forEach((tile) => {
     tile.addEventListener("click", () => {

@@ -14,6 +14,9 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+const PRINT_ICON =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>';
+
 function sourceLabel(source) {
   if (source === "low_stock") return t("sl.sourceLowStock");
   if (source === "recipe") return t("sl.sourceRecipe");
@@ -64,9 +67,29 @@ function itemRowHtml(item) {
   `;
 }
 
+function printChecklistHtml() {
+  return `
+    <div class="print-only">
+      <h2>${t("nav.shoppingList")}</h2>
+      <ul class="print-list">
+        ${state.items
+          .map(
+            (item) => `
+          <li>
+            <span class="print-checkbox"></span>
+            <span>${escapeHtml(item.item_name)}${item.quantity_needed != null ? ` — ${item.quantity_needed} ${escapeHtml(item.unit || "")}` : ""}</span>
+          </li>
+        `
+          )
+          .join("")}
+      </ul>
+    </div>
+  `;
+}
+
 function template() {
   return `
-    <div class="card" style="display:flex;justify-content:space-between;align-items:center">
+    <div class="card no-print" style="display:flex;justify-content:space-between;align-items:center">
       <div>
         <div class="card-meta">${t("sl.estimatedTotal")}</div>
         <div class="card-title" style="font-size:1.3rem">${state.estimate.total_mad} MAD</div>
@@ -74,15 +97,16 @@ function template() {
       <div class="card-meta">${t("sl.itemCount", { count: state.estimate.item_count })}</div>
     </div>
 
-    <div class="card-row" style="margin-bottom:0.75rem">
+    <div class="card-row no-print" style="margin-bottom:0.75rem;justify-content:space-between">
       <select id="sl-filter">
         <option value="unpurchased" ${state.filter === "unpurchased" ? "selected" : ""}>${t("sl.unpurchased")}</option>
         <option value="purchased" ${state.filter === "purchased" ? "selected" : ""}>${t("sl.purchased")}</option>
         <option value="all" ${state.filter === "all" ? "selected" : ""}>${t("sl.all")}</option>
       </select>
+      <button type="button" class="btn btn-sm" id="sl-print-btn">${PRINT_ICON}<span>${t("common.print")}</span></button>
     </div>
 
-    <form class="card" id="sl-add-form">
+    <form class="card no-print" id="sl-add-form">
       <div class="section-title">${t("common.addItem")}</div>
       <div class="form-row">
         <div class="autocomplete-wrap">
@@ -100,13 +124,15 @@ function template() {
       <button class="btn btn-primary" type="submit">${t("common.addItem")}</button>
     </form>
 
-    <div id="sl-list">
+    <div id="sl-list" class="no-print">
       ${
         state.items.length
           ? state.items.map(itemRowHtml).join("")
           : `<div class="empty-state">${t("sl.empty")}</div>`
       }
     </div>
+
+    ${printChecklistHtml()}
   `;
 }
 
@@ -217,6 +243,8 @@ function wireEvents(container) {
     state.filter = e.target.value;
     refresh(container);
   });
+
+  container.querySelector("#sl-print-btn").addEventListener("click", () => window.print());
 
   container.querySelector("#sl-add-form").addEventListener("submit", async (e) => {
     e.preventDefault();
