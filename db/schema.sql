@@ -43,9 +43,14 @@ CREATE TABLE IF NOT EXISTS shopping_list (
     source                TEXT NOT NULL DEFAULT 'manual',
     recipe_id             INTEGER REFERENCES recipes(id) ON DELETE SET NULL,
     estimated_price_mad   NUMERIC,
+    image_url             TEXT,
     is_purchased          BOOLEAN NOT NULL DEFAULT false,
     created_at            TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Added after the initial table creation, so a plain CREATE TABLE IF NOT
+-- EXISTS above won't backfill it on an already-existing database.
+ALTER TABLE shopping_list ADD COLUMN IF NOT EXISTS image_url TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_shopping_list_is_purchased ON shopping_list (is_purchased);
 CREATE INDEX IF NOT EXISTS idx_shopping_list_recipe_id ON shopping_list (recipe_id);

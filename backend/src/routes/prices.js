@@ -51,7 +51,7 @@ export default async function pricesRoutes(fastify) {
     if (term.length < 2) return [];
     try {
       const result = await pool.query(
-        `SELECT DISTINCT ON (product_title) product_title, price_mad, unit
+        `SELECT DISTINCT ON (product_title) product_title, price_mad, unit, image_url
          FROM price_history
          WHERE product_title ~* $1
          ORDER BY product_title, scraped_at DESC

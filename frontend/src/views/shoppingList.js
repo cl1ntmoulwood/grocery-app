@@ -42,12 +42,17 @@ function itemRowHtml(item) {
       <div class="card-row">
         <label style="display:flex;align-items:center;gap:0.6rem;flex:1">
           <input type="checkbox" data-action="toggle-purchased" ${item.is_purchased ? "checked" : ""} />
+          ${
+            item.image_url
+              ? `<img class="sl-item-image" src="${escapeHtml(item.image_url)}" alt="" />`
+              : ""
+          }
           <div>
             <div class="card-title" style="${item.is_purchased ? "text-decoration:line-through;opacity:0.6" : ""}">
               ${escapeHtml(item.item_name)}
             </div>
             <div class="card-meta">
-              ${item.quantity_needed ?? "?"} ${escapeHtml(item.unit || "")}
+              ${item.quantity_needed != null ? `${item.quantity_needed} ${escapeHtml(item.unit || "")}` : ""}
               &middot; <span class="badge ${sourceBadgeClass(item.source)}">${escapeHtml(sourceLabel(item.source))}</span>
               ${item.estimated_price_mad != null ? `&middot; ${item.estimated_price_mad} MAD` : ""}
             </div>
@@ -91,6 +96,7 @@ function template() {
         <div><label>${t("common.unit")}</label><input type="text" name="unit" /></div>
         <div><label>${t("sl.estPrice")}</label><input type="number" step="any" name="estimated_price_mad" /></div>
       </div>
+      <input type="hidden" name="image_url" />
       <button class="btn btn-primary" type="submit">${t("common.addItem")}</button>
     </form>
 
@@ -163,6 +169,10 @@ function wireItemNameAutocomplete(container) {
 
   input.addEventListener("input", () => {
     const term = input.value.trim();
+    // The user is typing something new, so any image/price picked from a
+    // previous suggestion no longer necessarily matches — clear it rather
+    // than risk attaching a stale product's picture to a different item.
+    form.image_url.value = "";
     clearTimeout(debounceTimer);
     if (term.length < 2) {
       closeList();
@@ -190,6 +200,7 @@ function wireItemNameAutocomplete(container) {
     input.value = result.product_title;
     if (!form.unit.value) form.unit.value = result.unit || "";
     form.estimated_price_mad.value = result.price_mad;
+    form.image_url.value = result.image_url || "";
     closeList();
   });
 
@@ -212,9 +223,10 @@ function wireEvents(container) {
     const form = e.target;
     const data = {
       item_name: form.item_name.value.trim(),
-      quantity_needed: form.quantity_needed.value || undefined,
+      quantity_needed: form.quantity_needed.value || 1,
       unit: form.unit.value.trim() || undefined,
       estimated_price_mad: form.estimated_price_mad.value || undefined,
+      image_url: form.image_url.value || undefined,
     };
     try {
       await shoppingListApi.create(data);

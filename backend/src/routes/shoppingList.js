@@ -8,6 +8,7 @@ const UPDATABLE_FIELDS = [
   "source",
   "recipe_id",
   "estimated_price_mad",
+  "image_url",
   "is_purchased",
 ];
 
@@ -61,6 +62,7 @@ export default async function shoppingListRoutes(fastify) {
       source,
       recipe_id,
       estimated_price_mad,
+      image_url,
     } = request.body ?? {};
 
     if (typeof item_name !== "string" || item_name.trim() === "") {
@@ -69,8 +71,8 @@ export default async function shoppingListRoutes(fastify) {
 
     try {
       const result = await pool.query(
-        `INSERT INTO shopping_list (item_name, quantity_needed, unit, source, recipe_id, estimated_price_mad)
-         VALUES ($1, $2, $3, COALESCE($4, 'manual'), $5, $6)
+        `INSERT INTO shopping_list (item_name, quantity_needed, unit, source, recipe_id, estimated_price_mad, image_url)
+         VALUES ($1, $2, $3, COALESCE($4, 'manual'), $5, $6, $7)
          RETURNING *`,
         [
           item_name,
@@ -79,6 +81,7 @@ export default async function shoppingListRoutes(fastify) {
           source ?? null,
           recipe_id ?? null,
           estimated_price_mad ?? null,
+          image_url ?? null,
         ]
       );
       return reply.code(201).send(result.rows[0]);
