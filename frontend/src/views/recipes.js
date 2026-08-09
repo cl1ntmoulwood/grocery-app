@@ -1,5 +1,6 @@
 import { recipesApi } from "../api.js";
 import { showError, showToast } from "../toast.js";
+import { t } from "../i18n.js";
 
 let state = {
   mode: "list", // "list" | "detail" | "add"
@@ -23,7 +24,7 @@ function statusBadge(status) {
 
 function listTemplate() {
   return `
-    <button class="btn btn-primary" id="rec-new-btn" style="margin-bottom:0.75rem">+ New recipe</button>
+    <button class="btn btn-primary" id="rec-new-btn" style="margin-bottom:0.75rem">${t("rec.newRecipe")}</button>
     ${
       state.recipes.length
         ? state.recipes
@@ -33,21 +34,21 @@ function listTemplate() {
           <div class="card-row">
             <div>
               <div class="card-title">${escapeHtml(r.title)}</div>
-              <div class="card-meta">${r.servings ? `${r.servings} servings` : ""}</div>
+              <div class="card-meta">${r.servings ? t("rec.servings", { count: r.servings }) : ""}</div>
             </div>
-            <button class="btn btn-sm" data-action="view">View</button>
+            <button class="btn btn-sm" data-action="view">${t("rec.view")}</button>
           </div>
         </div>
       `
             )
             .join("")
-        : '<div class="empty-state">No recipes yet.</div>'
+        : `<div class="empty-state">${t("rec.empty")}</div>`
     }
   `;
 }
 
 async function renderList(container) {
-  container.innerHTML = '<div class="empty-state">Loading…</div>';
+  container.innerHTML = `<div class="empty-state">${t("common.loading")}</div>`;
   try {
     state.recipes = await recipesApi.list();
   } catch (err) {
@@ -71,7 +72,7 @@ async function renderList(container) {
 // -------------------------------------------------------------- detail ----
 
 async function openDetail(container, id) {
-  container.innerHTML = '<div class="empty-state">Loading…</div>';
+  container.innerHTML = `<div class="empty-state">${t("common.loading")}</div>`;
   state.checkResult = null;
   try {
     state.detail = await recipesApi.get(id);
@@ -86,15 +87,15 @@ async function openDetail(container, id) {
 function detailTemplate() {
   const r = state.detail;
   return `
-    <button class="link-btn" id="rec-back-btn">&larr; Back to recipes</button>
+    <button class="link-btn" id="rec-back-btn">${t("rec.back")}</button>
     <div class="card" style="margin-top:0.5rem">
       <div class="card-title" style="font-size:1.2rem">${escapeHtml(r.title)}</div>
-      <div class="card-meta">${r.servings ? `${r.servings} servings` : ""}</div>
+      <div class="card-meta">${r.servings ? t("rec.servings", { count: r.servings }) : ""}</div>
       ${r.instructions ? `<p>${escapeHtml(r.instructions)}</p>` : ""}
     </div>
 
     <div class="card">
-      <div class="section-title">Ingredients</div>
+      <div class="section-title">${t("rec.ingredients")}</div>
       ${
         r.ingredients.length
           ? r.ingredients
@@ -108,14 +109,14 @@ function detailTemplate() {
           `;
               })
               .join("")
-          : '<div class="card-meta">No ingredients listed.</div>'
+          : `<div class="card-meta">${t("rec.noIngredients")}</div>`
       }
     </div>
 
     <div class="card-row" style="gap:0.5rem">
-      <button class="btn" id="rec-check-btn">Check inventory</button>
-      <button class="btn" id="rec-genlist-btn">Add missing to shopping list</button>
-      <button class="btn btn-danger" id="rec-delete-btn">Delete recipe</button>
+      <button class="btn" id="rec-check-btn">${t("rec.checkInventory")}</button>
+      <button class="btn" id="rec-genlist-btn">${t("rec.addMissing")}</button>
+      <button class="btn btn-danger" id="rec-delete-btn">${t("rec.deleteRecipe")}</button>
     </div>
   `;
 }
@@ -131,7 +132,7 @@ function wireDetailEvents(container) {
       state.checkResult = await recipesApi.checkInventory(state.detail.id);
       container.innerHTML = detailTemplate();
       wireDetailEvents(container);
-      showToast("Inventory checked");
+      showToast(t("rec.inventoryChecked"));
     } catch (err) {
       showError(err);
     }
@@ -140,17 +141,17 @@ function wireDetailEvents(container) {
   container.querySelector("#rec-genlist-btn").addEventListener("click", async () => {
     try {
       const added = await recipesApi.generateList(state.detail.id);
-      showToast(added.length ? `Added ${added.length} item(s) to shopping list` : "Nothing missing — all set!");
+      showToast(added.length ? t("rec.addedItems", { count: added.length }) : t("rec.nothingMissing"));
     } catch (err) {
       showError(err);
     }
   });
 
   container.querySelector("#rec-delete-btn").addEventListener("click", async () => {
-    if (!confirm("Delete this recipe?")) return;
+    if (!confirm(t("rec.deleteConfirm"))) return;
     try {
       await recipesApi.remove(state.detail.id);
-      showToast("Recipe deleted");
+      showToast(t("rec.recipeDeleted"));
       state.mode = "list";
       renderView(container);
     } catch (err) {
@@ -163,20 +164,20 @@ function wireDetailEvents(container) {
 
 function addTemplate() {
   return `
-    <button class="link-btn" id="rec-back-btn">&larr; Back to recipes</button>
+    <button class="link-btn" id="rec-back-btn">${t("rec.back")}</button>
     <form class="card" id="rec-add-form" style="margin-top:0.5rem">
-      <div class="section-title">New recipe</div>
-      <div><label>Title</label><input type="text" name="title" required /></div>
+      <div class="section-title">${t("rec.newRecipeTitle")}</div>
+      <div><label>${t("rec.title")}</label><input type="text" name="title" required /></div>
       <div class="form-row">
-        <div><label>Servings</label><input type="number" name="servings" /></div>
+        <div><label>${t("rec.servingsLabel")}</label><input type="number" name="servings" /></div>
       </div>
-      <div><label>Instructions</label><textarea name="instructions"></textarea></div>
+      <div><label>${t("rec.instructions")}</label><textarea name="instructions"></textarea></div>
 
-      <div class="section-title" style="margin-top:0.75rem">Ingredients</div>
+      <div class="section-title" style="margin-top:0.75rem">${t("rec.ingredients")}</div>
       <div id="rec-ingredients"></div>
-      <button type="button" class="btn btn-sm" id="rec-add-ingredient">+ Add ingredient</button>
+      <button type="button" class="btn btn-sm" id="rec-add-ingredient">${t("rec.addIngredient")}</button>
 
-      <button class="btn btn-primary" type="submit" style="margin-top:0.75rem">Save recipe</button>
+      <button class="btn btn-primary" type="submit" style="margin-top:0.75rem">${t("rec.saveRecipe")}</button>
     </form>
   `;
 }
@@ -184,9 +185,9 @@ function addTemplate() {
 function ingredientRowHtml() {
   return `
     <div class="ingredient-row">
-      <input type="text" placeholder="Ingredient name" data-field="ingredient_name" required />
-      <input type="number" step="any" placeholder="Qty" data-field="quantity_needed" required />
-      <input type="text" placeholder="Unit" data-field="unit" />
+      <input type="text" placeholder="${t("rec.ingredientName")}" data-field="ingredient_name" required />
+      <input type="number" step="any" placeholder="${t("rec.qty")}" data-field="quantity_needed" required />
+      <input type="text" placeholder="${t("common.unit")}" data-field="unit" />
       <button type="button" class="btn btn-sm btn-danger" data-action="remove-ingredient">&times;</button>
     </div>
   `;
@@ -232,7 +233,7 @@ function wireAddEvents(container) {
 
     try {
       await recipesApi.create(data);
-      showToast("Recipe created");
+      showToast(t("rec.recipeCreated"));
       state.mode = "list";
       renderView(container);
     } catch (err) {

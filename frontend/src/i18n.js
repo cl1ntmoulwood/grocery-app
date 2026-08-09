@@ -1,0 +1,240 @@
+const STORAGE_KEY = "courses-home-locale";
+
+const translations = {
+  en: {
+    "nav.inventory": "Inventory",
+    "nav.shoppingList": "Shopping List",
+    "nav.recipes": "Recipes",
+    "nav.prices": "Prices",
+
+    "common.name": "Name",
+    "common.category": "Category",
+    "common.quantity": "Quantity",
+    "common.unit": "Unit",
+    "common.save": "Save",
+    "common.delete": "Delete",
+    "common.addItem": "Add item",
+    "common.loading": "Loading…",
+    "common.uncategorized": "uncategorized",
+    "common.somethingWrong": "Something went wrong",
+
+    "inv.allCategories": "All categories",
+    "inv.lowStockOnly": "Low stock only",
+    "inv.lowThreshold": "Low threshold",
+    "inv.categoryPlaceholder": "e.g. Pantry",
+    "inv.empty": "No inventory items yet.",
+    "inv.deleteConfirm": "Delete this item?",
+    "inv.itemAdded": "Item added",
+    "inv.itemDeleted": "Item deleted",
+    "inv.itemUpdated": "Item updated",
+    "inv.columnItem": "Item",
+
+    "sl.estimatedTotal": "Estimated total (unpurchased)",
+    "sl.itemCount": "{{count}} item(s)",
+    "sl.unpurchased": "Unpurchased",
+    "sl.purchased": "Purchased",
+    "sl.all": "All",
+    "sl.itemName": "Item name",
+    "sl.quantityNeeded": "Quantity needed",
+    "sl.estPrice": "Est. price (MAD)",
+    "sl.empty": "Nothing here.",
+    "sl.deleteConfirm": "Delete this item?",
+    "sl.itemAdded": "Item added",
+    "sl.markedPurchased": "Marked purchased",
+    "sl.markedUnpurchased": "Marked unpurchased",
+    "sl.itemDeleted": "Item deleted",
+    "sl.sourceLowStock": "low stock",
+    "sl.sourceRecipe": "recipe",
+
+    "rec.newRecipe": "+ New recipe",
+    "rec.empty": "No recipes yet.",
+    "rec.servings": "{{count}} servings",
+    "rec.servingsLabel": "Servings",
+    "rec.view": "View",
+    "rec.back": "← Back to recipes",
+    "rec.ingredients": "Ingredients",
+    "rec.noIngredients": "No ingredients listed.",
+    "rec.checkInventory": "Check inventory",
+    "rec.addMissing": "Add missing to shopping list",
+    "rec.deleteRecipe": "Delete recipe",
+    "rec.deleteConfirm": "Delete this recipe?",
+    "rec.inventoryChecked": "Inventory checked",
+    "rec.addedItems": "Added {{count}} item(s) to shopping list",
+    "rec.nothingMissing": "Nothing missing — all set!",
+    "rec.recipeDeleted": "Recipe deleted",
+    "rec.newRecipeTitle": "New recipe",
+    "rec.title": "Title",
+    "rec.instructions": "Instructions",
+    "rec.addIngredient": "+ Add ingredient",
+    "rec.saveRecipe": "Save recipe",
+    "rec.ingredientName": "Ingredient name",
+    "rec.qty": "Qty",
+    "rec.recipeCreated": "Recipe created",
+
+    "pr.searchTitle": "Search local prices",
+    "pr.searchPlaceholder": "e.g. Lait",
+    "pr.search": "Search",
+    "pr.emptyPrompt": "Search for a grocery item to see tracked prices.",
+    "pr.noData": 'No price data yet for "{{term}}". The price scraper hasn\'t collected this item yet — check back once it\'s run.',
+    "pr.history": "History",
+    "pr.hide": "Hide",
+    "pr.viewListing": "view listing",
+    "pr.asOf": "as of {{time}}",
+    "pr.today": "today",
+    "pr.yesterday": "yesterday",
+    "pr.daysAgo": "{{days}} days ago",
+    "pr.loadError": "Could not load history.",
+
+    // Display names for bringo.ma category tiles, keyed by the canonical
+    // search_term slug (see scraper/bringo_scraper.py STORE_CATEGORIES).
+    // The raw slug is a decent fallback (prettifyCategory in prices.js
+    // title-cases it) but doesn't read naturally, e.g. "eaux-boissons"
+    // title-cases to "Eaux Boissons" rather than its real category name.
+    "pr.cat.animaux": "Pets",
+    "pr.cat.boulangerie-patisserie": "Bakery & Pastry",
+    "pr.cat.cereales-biscuits-confiseries": "Cereal, Biscuits & Sweets",
+    "pr.cat.charcuterie": "Deli & Cold Cuts",
+    "pr.cat.droguerie": "Hardware & Drugstore",
+    "pr.cat.eaux-boissons": "Water & Soft Drinks",
+    "pr.cat.entretien-nettoyage": "Cleaning & Maintenance",
+    "pr.cat.epicerie": "Pantry & Groceries",
+    "pr.cat.glaces-surgele": "Ice Cream & Frozen",
+    "pr.cat.high-tech-multimedia": "Tech & Multimedia",
+    "pr.cat.hygiene-beaute": "Health & Beauty",
+    "pr.cat.librairie-jouets": "Books & Toys",
+    "pr.cat.ma-maison": "Home",
+    "pr.cat.mon-marche": "Fresh Market (Produce)",
+    "pr.cat.monde-bebe": "Baby World",
+    "pr.cat.produits-laitiers-oeufs": "Dairy & Eggs",
+    "pr.cat.tout-pour-votre-cuisine": "Kitchen Essentials",
+    "pr.cat.vetements-textile": "Clothing & Textiles",
+  },
+  fr: {
+    "nav.inventory": "Inventaire",
+    "nav.shoppingList": "Liste de courses",
+    "nav.recipes": "Recettes",
+    "nav.prices": "Prix",
+
+    "common.name": "Nom",
+    "common.category": "Catégorie",
+    "common.quantity": "Quantité",
+    "common.unit": "Unité",
+    "common.save": "Enregistrer",
+    "common.delete": "Supprimer",
+    "common.addItem": "Ajouter un article",
+    "common.loading": "Chargement…",
+    "common.uncategorized": "non catégorisé",
+    "common.somethingWrong": "Une erreur est survenue",
+
+    "inv.allCategories": "Toutes les catégories",
+    "inv.lowStockOnly": "Stock faible seulement",
+    "inv.lowThreshold": "Seuil bas",
+    "inv.categoryPlaceholder": "ex. Garde-manger",
+    "inv.empty": "Aucun article pour l'instant.",
+    "inv.deleteConfirm": "Supprimer cet article ?",
+    "inv.itemAdded": "Article ajouté",
+    "inv.itemDeleted": "Article supprimé",
+    "inv.itemUpdated": "Article mis à jour",
+    "inv.columnItem": "Article",
+
+    "sl.estimatedTotal": "Total estimé (non acheté)",
+    "sl.itemCount": "{{count}} article(s)",
+    "sl.unpurchased": "Non acheté",
+    "sl.purchased": "Acheté",
+    "sl.all": "Tous",
+    "sl.itemName": "Nom de l'article",
+    "sl.quantityNeeded": "Quantité nécessaire",
+    "sl.estPrice": "Prix est. (MAD)",
+    "sl.empty": "Rien ici.",
+    "sl.deleteConfirm": "Supprimer cet article ?",
+    "sl.itemAdded": "Article ajouté",
+    "sl.markedPurchased": "Marqué comme acheté",
+    "sl.markedUnpurchased": "Marqué comme non acheté",
+    "sl.itemDeleted": "Article supprimé",
+    "sl.sourceLowStock": "stock faible",
+    "sl.sourceRecipe": "recette",
+
+    "rec.newRecipe": "+ Nouvelle recette",
+    "rec.empty": "Aucune recette pour l'instant.",
+    "rec.servings": "{{count}} portions",
+    "rec.servingsLabel": "Portions",
+    "rec.view": "Voir",
+    "rec.back": "← Retour aux recettes",
+    "rec.ingredients": "Ingrédients",
+    "rec.noIngredients": "Aucun ingrédient répertorié.",
+    "rec.checkInventory": "Vérifier l'inventaire",
+    "rec.addMissing": "Ajouter les manquants à la liste",
+    "rec.deleteRecipe": "Supprimer la recette",
+    "rec.deleteConfirm": "Supprimer cette recette ?",
+    "rec.inventoryChecked": "Inventaire vérifié",
+    "rec.addedItems": "{{count}} article(s) ajouté(s) à la liste de courses",
+    "rec.nothingMissing": "Rien ne manque — tout est prêt !",
+    "rec.recipeDeleted": "Recette supprimée",
+    "rec.newRecipeTitle": "Nouvelle recette",
+    "rec.title": "Titre",
+    "rec.instructions": "Instructions",
+    "rec.addIngredient": "+ Ajouter un ingrédient",
+    "rec.saveRecipe": "Enregistrer la recette",
+    "rec.ingredientName": "Nom de l'ingrédient",
+    "rec.qty": "Qté",
+    "rec.recipeCreated": "Recette créée",
+
+    "pr.searchTitle": "Rechercher les prix locaux",
+    "pr.searchPlaceholder": "ex. Lait",
+    "pr.search": "Rechercher",
+    "pr.emptyPrompt": "Recherchez un article pour voir les prix suivis.",
+    "pr.noData": "Aucune donnée de prix pour « {{term}} » pour l'instant. Le collecteur de prix ne l'a pas encore récupéré — revenez plus tard.",
+    "pr.history": "Historique",
+    "pr.hide": "Masquer",
+    "pr.viewListing": "voir l'annonce",
+    "pr.asOf": "au {{time}}",
+    "pr.today": "aujourd'hui",
+    "pr.yesterday": "hier",
+    "pr.daysAgo": "il y a {{days}} jours",
+    "pr.loadError": "Impossible de charger l'historique.",
+
+    "pr.cat.animaux": "Animalerie",
+    "pr.cat.boulangerie-patisserie": "Boulangerie & Pâtisserie",
+    "pr.cat.cereales-biscuits-confiseries": "Céréales, biscuits & confiseries",
+    "pr.cat.charcuterie": "Charcuterie",
+    "pr.cat.droguerie": "Droguerie",
+    "pr.cat.eaux-boissons": "Eaux et boissons gazeuses",
+    "pr.cat.entretien-nettoyage": "Entretien & nettoyage",
+    "pr.cat.epicerie": "Épicerie",
+    "pr.cat.glaces-surgele": "Glaces & surgelés",
+    "pr.cat.high-tech-multimedia": "High-tech & multimédia",
+    "pr.cat.hygiene-beaute": "Hygiène & beauté",
+    "pr.cat.librairie-jouets": "Librairie & jouets",
+    "pr.cat.ma-maison": "Ma maison",
+    "pr.cat.mon-marche": "Mon marché",
+    "pr.cat.monde-bebe": "Monde bébé",
+    "pr.cat.produits-laitiers-oeufs": "Produits laitiers & œufs",
+    "pr.cat.tout-pour-votre-cuisine": "Tout pour votre cuisine",
+    "pr.cat.vetements-textile": "Vêtements & textile",
+  },
+};
+
+let locale = localStorage.getItem(STORAGE_KEY) === "fr" ? "fr" : "en";
+const listeners = new Set();
+
+export function getLocale() {
+  return locale;
+}
+
+export function setLocale(next) {
+  if (next !== "en" && next !== "fr") return;
+  if (next === locale) return;
+  locale = next;
+  localStorage.setItem(STORAGE_KEY, locale);
+  listeners.forEach((cb) => cb(locale));
+}
+
+export function onLocaleChange(cb) {
+  listeners.add(cb);
+}
+
+export function t(key, vars) {
+  const str = translations[locale][key] ?? translations.en[key] ?? key;
+  if (!vars) return str;
+  return str.replace(/\{\{(\w+)\}\}/g, (_, name) => vars[name] ?? "");
+}

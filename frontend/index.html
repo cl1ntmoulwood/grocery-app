@@ -11,15 +11,43 @@
   </head>
   <body>
     <header class="app-header">
-      <h1>Courses.Home</h1>
+      <div class="app-header-top">
+        <h1 class="logo">courses<span class="logo-accent">.home</span></h1>
+        <div class="lang-toggle" id="lang-toggle">
+          <button type="button" data-lang="en" class="is-active">EN</button>
+          <button type="button" data-lang="fr">FR</button>
+        </div>
+      </div>
       <nav class="tabs" id="tabs">
-        <button class="tab-btn is-active" data-view="inventory">Inventory</button>
-        <button class="tab-btn" data-view="shopping-list">Shopping List</button>
-        <button class="tab-btn" data-view="recipes">Recipes</button>
-        <button class="tab-btn" data-view="prices">Prices</button>
+        <button class="tab-btn is-active" data-view="inventory" data-i18n="nav.inventory">Inventory</button>
+        <button class="tab-btn" data-view="shopping-list" data-i18n="nav.shoppingList">Shopping List</button>
+        <button class="tab-btn" data-view="recipes" data-i18n="nav.recipes">Recipes</button>
+        <button class="tab-btn" data-view="prices" data-i18n="nav.prices">Prices</button>
       </nav>
     </header>
-    <main id="app"></main>
+    <div class="app-body">
+      <aside class="sidebar">
+        <nav class="side-nav" id="side-nav">
+          <button class="side-nav-btn is-active" data-view="inventory">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8 12 3 3 8v8l9 5 9-5V8Z" /><path d="M3 8l9 5 9-5" /><path d="M12 13v8" /></svg>
+            <span data-i18n="nav.inventory">Inventory</span>
+          </button>
+          <button class="side-nav-btn" data-view="shopping-list">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6h11M9 12h11M9 18h11" /><path d="m4 6 1 1 2-2M4 12l1 1 2-2M4 18l1 1 2-2" /></svg>
+            <span data-i18n="nav.shoppingList">Shopping List</span>
+          </button>
+          <button class="side-nav-btn" data-view="recipes">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z" /></svg>
+            <span data-i18n="nav.recipes">Recipes</span>
+          </button>
+          <button class="side-nav-btn" data-view="prices">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2H2v10l9.29 9.29a1 1 0 0 0 1.42 0l8.58-8.58a1 1 0 0 0 0-1.42L12 2Z" /><circle cx="7" cy="7" r="1.5" /></svg>
+            <span data-i18n="nav.prices">Prices</span>
+          </button>
+        </nav>
+      </aside>
+      <main id="app"></main>
+    </div>
     <div id="toast" class="toast" hidden></div>
     <script type="module" src="/src/main.js"></script>
   </body>

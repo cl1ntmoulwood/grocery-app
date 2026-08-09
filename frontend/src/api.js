@@ -67,6 +67,8 @@ export const shoppingListApi = {
 export const pricesApi = {
   latest: (term) => request(`/api/prices/${encodeURIComponent(term)}`),
   history: (term) => request(`/api/prices/${encodeURIComponent(term)}/history`),
+  suggest: (term) => request(`/api/prices/suggest?term=${encodeURIComponent(term)}`),
+  categories: () => request("/api/prices/categories"),
 };
 
 export { ApiError };

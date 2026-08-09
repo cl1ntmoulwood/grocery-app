@@ -1,3 +1,5 @@
+import { t } from "./i18n.js";
+
 const el = document.getElementById("toast");
 let hideTimer = null;
 
@@ -13,5 +15,5 @@ export function showToast(message, { isError = false } = {}) {
 }
 
 export function showError(err) {
-  showToast(err?.message || "Something went wrong", { isError: true });
+  showToast(err?.message || t("common.somethingWrong"), { isError: true });
 }
