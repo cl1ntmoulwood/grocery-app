@@ -18,15 +18,18 @@ services:
 
   backend:
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
     restart: unless-stopped
     environment:
       DATABASE_URL: postgres://pantry:pantry@db:5432/pantry
       COOKIE_SECRET: c7f76b5daac7db3c1cbb08ef44d0a9f032c437d8dde5576122ff1dea665c34b6
+      YOUTUBE_API_KEY: AIzaSyBK8Xvkc3gSMQVUOa2je5NbP5RWEmfTsc4
     ports:
       - "3000:3000"
     volumes:
       - ./db:/db:ro
+      - uploads_data:/app/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -53,3 +56,4 @@ services:
 
 volumes:
   pantry_db_data:
+  uploads_data:

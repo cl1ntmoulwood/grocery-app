@@ -1,20 +1,20 @@
-import { inventoryApi } from "../api.js";
+import { inventoryApi, uploadsApi } from "../api.js";
 import { showError, showToast } from "../toast.js";
-import { t } from "../i18n.js";
+import { t, getLocale } from "../i18n.js";
 
 // Fixed, sensible household categories for the Add-item suggestion list —
 // independent of scraped price data, which reflects a grocery site's own
 // e-commerce browsing taxonomy (French, narrow), not how a family organizes
 // a fridge/pantry. The field is still free text, so anything else works too.
-const HOUSEHOLD_CATEGORIES = [
-  "Dairy & Eggs",
-  "Fruits & Vegetables",
-  "Bakery",
-  "Meat & Poultry",
-  "Pantry",
-  "Beverages",
-  "Frozen",
-  "Household",
+const HOUSEHOLD_CATEGORY_KEYS = [
+  "inv.cat.dairyEggs",
+  "inv.cat.fruitsVegetables",
+  "inv.cat.bakery",
+  "inv.cat.meatPoultry",
+  "inv.cat.pantry",
+  "inv.cat.beverages",
+  "inv.cat.frozen",
+  "inv.cat.household",
 ];
 
 let state = {
@@ -63,9 +63,12 @@ function itemRowHtml(item) {
 
   return `
     <div class="inv-row" data-id="${item.id}">
-      <div class="inv-cell">
-        <div class="card-title">${escapeHtml(item.name)}</div>
-        <div class="card-meta">${escapeHtml(item.category) || t("common.uncategorized")}</div>
+      <div class="inv-cell inv-cell-name">
+        ${item.image_url ? `<img class="inv-thumb" src="${escapeHtml(item.image_url)}" alt="" />` : ""}
+        <div>
+          <div class="card-title">${escapeHtml(item.name)}</div>
+          <div class="card-meta">${escapeHtml(item.category) || t("common.uncategorized")}</div>
+        </div>
       </div>
       <div class="inv-cell">
         <label class="inv-cell-label">${t("common.quantity")}</label>
@@ -96,21 +99,54 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+function printDateHtml() {
+  const date = new Date().toLocaleDateString(getLocale() === "fr" ? "fr-FR" : "en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  return `<span class="print-date">${t("common.printedOn", { date })}</span>`;
+}
+
 function printListHtml() {
   return `
     <div class="print-only">
-      <h2>${t("nav.inventory")}</h2>
-      <ul class="print-list">
-        ${state.items
-          .map(
-            (item) => `
-          <li>
-            <span>${escapeHtml(item.name)}${escapeHtml(item.category) ? ` (${escapeHtml(item.category)})` : ""} — ${item.quantity} ${escapeHtml(item.unit || "")}</span>
-          </li>
-        `
-          )
-          .join("")}
-      </ul>
+      <div class="print-header">
+        <h2>${t("nav.inventory")}</h2>
+        ${printDateHtml()}
+      </div>
+      ${
+        state.items.length
+          ? `<table class="print-table">
+              <thead>
+                <tr>
+                  <th class="print-col-image"></th>
+                  <th>${t("inv.columnItem")}</th>
+                  <th>${t("common.category")}</th>
+                  <th>${t("common.quantity")}</th>
+                  <th>${t("common.unit")}</th>
+                  <th>${t("inv.lowThreshold")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${state.items
+                  .map(
+                    (item) => `
+                  <tr class="${isLowStock(item) ? "print-low-stock" : ""}">
+                    <td class="print-col-image">${item.image_url ? `<img class="print-thumb" src="${escapeHtml(item.image_url)}" alt="" />` : ""}</td>
+                    <td>${escapeHtml(item.name)}</td>
+                    <td>${escapeHtml(item.category) || "—"}</td>
+                    <td>${item.quantity}</td>
+                    <td>${escapeHtml(item.unit) || "—"}</td>
+                    <td>${item.low_threshold}</td>
+                  </tr>
+                `
+                  )
+                  .join("")}
+              </tbody>
+            </table>`
+          : `<div class="print-empty">${t("inv.empty")}</div>`
+      }
     </div>
   `;
 }
@@ -141,7 +177,7 @@ function template() {
           <label>${t("common.category")}</label>
           <input type="text" name="category" list="inv-category-suggestions" placeholder="${t("inv.categoryPlaceholder")}" />
           <datalist id="inv-category-suggestions">
-            ${HOUSEHOLD_CATEGORIES.map((c) => `<option value="${escapeHtml(c)}"></option>`).join("")}
+            ${HOUSEHOLD_CATEGORY_KEYS.map((key) => `<option value="${escapeHtml(t(key))}"></option>`).join("")}
           </datalist>
         </div>
       </div>
@@ -149,6 +185,12 @@ function template() {
         <div><label>${t("common.quantity")}</label><input type="number" step="any" name="quantity" required /></div>
         <div><label>${t("common.unit")}</label><input type="text" name="unit" /></div>
         <div><label>${t("inv.lowThreshold")}</label><input type="number" step="any" name="low_threshold" /></div>
+      </div>
+      <div class="photo-input-row">
+        <label>${t("common.photo")}</label>
+        <input type="file" accept="image/*" capture="environment" id="inv-photo-input" />
+        <img class="photo-input-preview" id="inv-photo-preview" hidden />
+        <input type="hidden" name="image_url" />
       </div>
       <button class="btn btn-primary" type="submit">${PLUS_ICON}<span>${t("common.addItem")}</span></button>
     </form>
@@ -206,6 +248,21 @@ function wireEvents(container) {
 
   container.querySelector("#inv-print-btn").addEventListener("click", () => window.print());
 
+  container.querySelector("#inv-photo-input").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const form = container.querySelector("#inv-add-form");
+    const preview = container.querySelector("#inv-photo-preview");
+    try {
+      const { url } = await uploadsApi.upload(file);
+      form.image_url.value = url;
+      preview.src = url;
+      preview.hidden = false;
+    } catch (err) {
+      showError(err);
+    }
+  });
+
   container.querySelector("#inv-add-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const form = e.target;
@@ -215,6 +272,7 @@ function wireEvents(container) {
       quantity: form.quantity.value,
       unit: form.unit.value.trim() || undefined,
       low_threshold: form.low_threshold.value || undefined,
+      image_url: form.image_url.value || undefined,
     };
     try {
       await inventoryApi.create(data);

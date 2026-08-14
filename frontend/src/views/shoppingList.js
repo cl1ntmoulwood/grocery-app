@@ -1,17 +1,30 @@
-import { shoppingListApi, pricesApi } from "../api.js";
+import { shoppingListApi, pricesApi, uploadsApi } from "../api.js";
 import { showError, showToast } from "../toast.js";
-import { t } from "../i18n.js";
+import { t, getLocale } from "../i18n.js";
 
 let state = {
   items: [],
   estimate: { total_mad: 0, item_count: 0 },
   filter: "unpurchased", // "all" | "purchased" | "unpurchased"
+  categories: [], // real category slugs from tracked price data (see pricesApi.categories)
 };
 
 function escapeHtml(str) {
   const div = document.createElement("div");
   div.textContent = str ?? "";
   return div.innerHTML;
+}
+
+// Same slug-to-label logic as prices.js's prettifyCategory — duplicated
+// rather than shared, matching this codebase's per-view convention (each
+// view already owns its own escapeHtml, etc.).
+function prettifyCategory(term) {
+  const known = t(`pr.cat.${term}`);
+  if (known !== `pr.cat.${term}`) return known;
+  return term
+    .split("-")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
 }
 
 const PRINT_ICON =
@@ -58,6 +71,7 @@ function itemRowHtml(item) {
               ${item.quantity_needed != null ? `${item.quantity_needed} ${escapeHtml(item.unit || "")}` : ""}
               &middot; <span class="badge ${sourceBadgeClass(item.source)}">${escapeHtml(sourceLabel(item.source))}</span>
               ${item.estimated_price_mad != null ? `&middot; ${item.estimated_price_mad} MAD` : ""}
+              ${item.category ? `&middot; ${escapeHtml(prettifyCategory(item.category))}` : ""}
             </div>
           </div>
         </label>
@@ -67,22 +81,52 @@ function itemRowHtml(item) {
   `;
 }
 
+function printDateHtml() {
+  const date = new Date().toLocaleDateString(getLocale() === "fr" ? "fr-FR" : "en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  return `<span class="print-date">${t("common.printedOn", { date })}</span>`;
+}
+
 function printChecklistHtml() {
   return `
     <div class="print-only">
-      <h2>${t("nav.shoppingList")}</h2>
-      <ul class="print-list">
-        ${state.items
-          .map(
-            (item) => `
-          <li>
-            <span class="print-checkbox"></span>
-            <span>${escapeHtml(item.item_name)}${item.quantity_needed != null ? ` — ${item.quantity_needed} ${escapeHtml(item.unit || "")}` : ""}</span>
-          </li>
-        `
-          )
-          .join("")}
-      </ul>
+      <div class="print-header">
+        <h2>${t("nav.shoppingList")}</h2>
+        ${printDateHtml()}
+      </div>
+      ${
+        state.items.length
+          ? `<table class="print-table">
+              <thead>
+                <tr>
+                  <th class="print-col-check"></th>
+                  <th class="print-col-image"></th>
+                  <th>${t("sl.itemName")}</th>
+                  <th>${t("sl.quantityNeeded")}</th>
+                  <th>${t("common.unit")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${state.items
+                  .map(
+                    (item) => `
+                  <tr>
+                    <td class="print-col-check"><span class="print-checkbox"></span></td>
+                    <td class="print-col-image">${item.image_url ? `<img class="print-thumb" src="${escapeHtml(item.image_url)}" alt="" />` : ""}</td>
+                    <td>${escapeHtml(item.item_name)}</td>
+                    <td>${item.quantity_needed != null ? item.quantity_needed : "—"}</td>
+                    <td>${escapeHtml(item.unit) || "—"}</td>
+                  </tr>
+                `
+                  )
+                  .join("")}
+              </tbody>
+            </table>`
+          : `<div class="print-empty">${t("sl.empty")}</div>`
+      }
     </div>
   `;
 }
@@ -119,8 +163,20 @@ function template() {
         <div><label>${t("sl.quantityNeeded")}</label><input type="number" step="any" name="quantity_needed" /></div>
         <div><label>${t("common.unit")}</label><input type="text" name="unit" /></div>
         <div><label>${t("sl.estPrice")}</label><input type="number" step="any" name="estimated_price_mad" /></div>
+        <div>
+          <label>${t("common.category")}</label>
+          <input type="text" name="category" list="sl-category-suggestions" />
+          <datalist id="sl-category-suggestions">
+            ${state.categories.map((c) => `<option value="${escapeHtml(prettifyCategory(c.search_term))}"></option>`).join("")}
+          </datalist>
+        </div>
       </div>
-      <input type="hidden" name="image_url" />
+      <div class="photo-input-row">
+        <label>${t("common.photo")}</label>
+        <input type="file" accept="image/*" capture="environment" id="sl-photo-input" />
+        <img class="photo-input-preview" id="sl-photo-preview" hidden />
+        <input type="hidden" name="image_url" />
+      </div>
       <button class="btn btn-primary" type="submit">${t("common.addItem")}</button>
     </form>
 
@@ -140,6 +196,7 @@ export async function render(container) {
   container.innerHTML = `<div class="empty-state">${t("common.loading")}</div>`;
   try {
     await loadItems();
+    state.categories = await pricesApi.categories();
   } catch (err) {
     showError(err);
   }
@@ -246,11 +303,29 @@ function wireEvents(container) {
 
   container.querySelector("#sl-print-btn").addEventListener("click", () => window.print());
 
+  container.querySelector("#sl-photo-input").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const form = container.querySelector("#sl-add-form");
+    const preview = container.querySelector("#sl-photo-preview");
+    try {
+      const { url } = await uploadsApi.upload(file);
+      // A deliberately-taken photo is a stronger signal than an
+      // autocomplete guess — overwrite whatever that may have set.
+      form.image_url.value = url;
+      preview.src = url;
+      preview.hidden = false;
+    } catch (err) {
+      showError(err);
+    }
+  });
+
   container.querySelector("#sl-add-form").addEventListener("submit", async (e) => {
     e.preventDefault();
     const form = e.target;
     const data = {
       item_name: form.item_name.value.trim(),
+      category: form.category.value.trim() || undefined,
       quantity_needed: form.quantity_needed.value || 1,
       unit: form.unit.value.trim() || undefined,
       estimated_price_mad: form.estimated_price_mad.value || undefined,

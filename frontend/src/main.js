@@ -8,6 +8,7 @@ import { render as renderWelcome } from "./views/welcome.js";
 import { render as renderLogin } from "./views/login.js";
 import { render as renderRegister } from "./views/register.js";
 import { render as renderProfiles } from "./views/profiles.js";
+import { render as renderMemberAccess } from "./views/memberAccess.js";
 import { authApi } from "./api.js";
 import { showError } from "./toast.js";
 import { t, getLocale, setLocale, onLocaleChange } from "./i18n.js";
@@ -26,6 +27,7 @@ const authViews = {
   login: renderLogin,
   register: renderRegister,
   profiles: renderProfiles,
+  memberAccess: renderMemberAccess,
 };
 
 const app = document.getElementById("app");
@@ -43,6 +45,7 @@ let currentView = "inventory";
 let currentRender = () => {};
 
 function applyStaticTranslations() {
+  document.title = t("common.pageTitle");
   document.querySelectorAll("[data-i18n]").forEach((el) => {
     el.textContent = t(el.dataset.i18n);
   });
@@ -128,7 +131,7 @@ logoutBtn.addEventListener("click", async () => {
 
 function route(session) {
   if (session.needsRegistration) return showAuthScreen("register");
-  if (!session.household) return showAuthScreen("login");
+  if (!session.household) return showAuthScreen("welcome");
   if (!session.profile) return showAuthScreen("profiles");
 
   document.body.classList.remove("pre-auth");

@@ -1,7 +1,28 @@
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
 import { pool } from "../db/pool.js";
 import { parseId, sendError } from "../utils/http.js";
 
-const RECIPE_UPDATABLE_FIELDS = ["title", "instructions", "servings"];
+const execFileAsync = promisify(execFile);
+
+const RECIPE_UPDATABLE_FIELDS = ["title", "description", "instructions", "servings", "video_url"];
+
+// Only cuisineaz.com recipe pages are ever allowed through to the scraper
+// subprocess — this must never become an open fetch-any-URL proxy.
+const CUISINEAZ_RECIPE_URL_RE = /^https:\/\/www\.cuisineaz\.com\/recettes\/[a-z0-9-]+\.aspx$/;
+
+// The YouTube API returns snippet titles/channel names HTML-entity-encoded
+// (a known quirk of the v3 API) — decoded once here so callers never see
+// literal "&amp;" etc.
+function decodeHtmlEntities(str) {
+  return str
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)));
+}
 
 async function getIngredientComparison(recipeId) {
   const ingredientsResult = await pool.query(
@@ -49,11 +70,119 @@ async function getIngredientComparison(recipeId) {
 }
 
 export default async function recipesRoutes(fastify) {
-  fastify.get("/recipes", async (request, reply) => {
+  // Registered before /recipes/:id so these static paths aren't shadowed
+  // by the dynamic param route, matching this file's existing convention.
+
+  // Pure local read — never touches cuisineaz.com. Answers instantly from
+  // the pre-built recipe_url_index (see scraper/cuisineaz_scraper.py
+  // --build-index), which must be run at least once for this to return
+  // anything.
+  fastify.get("/recipes/lookup", async (request, reply) => {
+    const q = (request.query.q ?? "").trim();
+    if (!q) return sendError(reply, 400, "q is required");
+
     try {
       const result = await pool.query(
-        "SELECT id, title, instructions, servings, created_at FROM recipes ORDER BY created_at DESC"
+        `SELECT url, title_guess FROM recipe_url_index
+         WHERE title_guess ILIKE '%' || $1 || '%' OR slug ILIKE '%' || $1 || '%'
+         ORDER BY length(title_guess) ASC
+         LIMIT 5`,
+        [q]
       );
+      return result.rows;
+    } catch (err) {
+      request.log.error(err);
+      return sendError(reply, 500, "Failed to look up recipes");
+    }
+  });
+
+  // Fetches and imports exactly ONE recipe the user explicitly picked —
+  // a single subprocess call per request, never a loop or a schedule.
+  // Same cost as a human clicking one link, not a search or a crawl.
+  fastify.post("/recipes/import", async (request, reply) => {
+    const { url } = request.body ?? {};
+    if (typeof url !== "string" || !CUISINEAZ_RECIPE_URL_RE.test(url)) {
+      return sendError(reply, 400, "url must be a https://www.cuisineaz.com/recettes/... recipe page");
+    }
+
+    // execFile throws on a non-zero exit code — the scraper deliberately
+    // exits 1 for an expected/graceful failure (e.g. already imported), so
+    // that case still carries a valid JSON result on stdout and must be
+    // parsed from the error object, not treated as an unexpected crash.
+    let stdout;
+    try {
+      ({ stdout } = await execFileAsync(
+        "python3",
+        ["/scraper/cuisineaz_scraper.py", "--import-url", url],
+        { env: process.env, timeout: 30000 }
+      ));
+    } catch (err) {
+      stdout = err.stdout;
+      if (!stdout) {
+        request.log.error(err);
+        return sendError(reply, 500, "Failed to import recipe");
+      }
+    }
+
+    try {
+      const result = JSON.parse(stdout.trim().split("\n").pop());
+      if (!result.ok) return sendError(reply, 409, result.error || "Import failed");
+      return reply.code(201).send(result.recipe);
+    } catch (err) {
+      request.log.error(err);
+      return sendError(reply, 500, "Failed to import recipe");
+    }
+  });
+
+  // Proxies the YouTube Data API v3 so the API key stays server-side —
+  // never sent to or exposed in the frontend bundle.
+  fastify.get("/recipes/youtube-search", async (request, reply) => {
+    const q = (request.query.q ?? "").trim();
+    if (!q) return sendError(reply, 400, "q is required");
+
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    if (!apiKey) return sendError(reply, 503, "YouTube search is not configured");
+
+    try {
+      const url = new URL("https://www.googleapis.com/youtube/v3/search");
+      url.searchParams.set("part", "snippet");
+      url.searchParams.set("type", "video");
+      url.searchParams.set("maxResults", "5");
+      url.searchParams.set("q", q);
+      url.searchParams.set("key", apiKey);
+
+      const response = await fetch(url);
+      if (!response.ok) {
+        request.log.error(await response.text());
+        return sendError(reply, 502, "YouTube search failed");
+      }
+
+      const data = await response.json();
+      return (data.items ?? []).map((item) => ({
+        videoId: item.id.videoId,
+        title: decodeHtmlEntities(item.snippet.title),
+        channelTitle: decodeHtmlEntities(item.snippet.channelTitle),
+        thumbnailUrl: item.snippet.thumbnails?.default?.url ?? null,
+        url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
+      }));
+    } catch (err) {
+      request.log.error(err);
+      return sendError(reply, 500, "Failed to search YouTube");
+    }
+  });
+
+  fastify.get("/recipes", async (request, reply) => {
+    const { search } = request.query;
+    try {
+      const result = search
+        ? await pool.query(
+            `SELECT id, title, description, image_url, instructions, servings, created_at
+             FROM recipes WHERE title ILIKE '%' || $1 || '%' ORDER BY created_at DESC`,
+            [search]
+          )
+        : await pool.query(
+            "SELECT id, title, description, image_url, instructions, servings, created_at FROM recipes ORDER BY created_at DESC"
+          );
       return result.rows;
     } catch (err) {
       request.log.error(err);
@@ -120,8 +249,12 @@ export default async function recipesRoutes(fastify) {
         "SELECT * FROM recipe_ingredients WHERE recipe_id = $1",
         [id]
       );
+      const stepsResult = await pool.query(
+        "SELECT * FROM recipe_steps WHERE recipe_id = $1 ORDER BY step_number ASC",
+        [id]
+      );
 
-      return { ...recipeResult.rows[0], ingredients: ingredientsResult.rows };
+      return { ...recipeResult.rows[0], ingredients: ingredientsResult.rows, steps: stepsResult.rows };
     } catch (err) {
       request.log.error(err);
       return sendError(reply, 500, "Failed to fetch recipe");
@@ -144,7 +277,7 @@ export default async function recipesRoutes(fastify) {
   });
 
   fastify.post("/recipes", async (request, reply) => {
-    const { title, instructions, servings, ingredients } = request.body ?? {};
+    const { title, description, instructions, servings, ingredients } = request.body ?? {};
 
     if (typeof title !== "string" || title.trim() === "") {
       return sendError(reply, 400, "title is required");
@@ -158,10 +291,10 @@ export default async function recipesRoutes(fastify) {
       await client.query("BEGIN");
 
       const recipeResult = await client.query(
-        `INSERT INTO recipes (title, instructions, servings)
-         VALUES ($1, $2, $3)
+        `INSERT INTO recipes (title, description, instructions, servings)
+         VALUES ($1, $2, $3, $4)
          RETURNING *`,
-        [title, instructions ?? null, servings ?? null]
+        [title, description ?? null, instructions ?? null, servings ?? null]
       );
       const recipe = recipeResult.rows[0];
 

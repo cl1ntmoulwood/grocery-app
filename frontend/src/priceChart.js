@@ -3,6 +3,8 @@
 // project's dataviz mark specs: 2px line, >=8px end marker with a surface
 // ring, hairline recessive gridlines, crosshair+tooltip, table-view fallback.
 
+import { t } from "./i18n.js";
+
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 function niceTicks(min, max, count = 4) {
@@ -28,7 +30,7 @@ export function renderPriceChart(container, points, { title } = {}) {
   container.innerHTML = "";
 
   if (!points.length) {
-    container.innerHTML = '<div class="empty-state">No price history yet.</div>';
+    container.innerHTML = `<div class="empty-state">${t("pr.noHistory")}</div>`;
     return;
   }
 
@@ -230,14 +232,14 @@ export function renderPriceChart(container, points, { title } = {}) {
   toggleBtn.type = "button";
   toggleBtn.className = "btn btn-sm link-btn";
   toggleBtn.style.marginTop = "0.5rem";
-  toggleBtn.textContent = "Show as table";
+  toggleBtn.textContent = t("pr.showAsTable");
   container.appendChild(toggleBtn);
 
   const table = document.createElement("table");
   table.style.cssText = "width:100%;border-collapse:collapse;margin-top:0.5rem;font-size:0.85rem;display:none";
   const thead = document.createElement("thead");
   const headRow = document.createElement("tr");
-  ["Date", "Price (MAD)"].forEach((h) => {
+  [t("pr.tableDate"), t("pr.tablePrice")].forEach((h) => {
     const th = document.createElement("th");
     th.textContent = h;
     th.style.cssText = "text-align:left;padding:0.3rem;border-bottom:1px solid var(--color-border);color:var(--color-muted)";
@@ -264,6 +266,6 @@ export function renderPriceChart(container, points, { title } = {}) {
     const showing = table.style.display !== "none";
     table.style.display = showing ? "none" : "table";
     wrapper.style.display = showing ? "block" : "none";
-    toggleBtn.textContent = showing ? "Show as table" : "Show as chart";
+    toggleBtn.textContent = showing ? t("pr.showAsTable") : t("pr.showAsChart");
   });
 }

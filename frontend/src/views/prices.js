@@ -1,7 +1,7 @@
 import { pricesApi } from "../api.js";
 import { showError } from "../toast.js";
 import { renderPriceChart } from "../priceChart.js";
-import { t } from "../i18n.js";
+import { t, getLocale } from "../i18n.js";
 
 let state = {
   term: "",
@@ -86,22 +86,47 @@ function resultTileHtml(item) {
   `;
 }
 
+function printDateHtml() {
+  const date = new Date().toLocaleDateString(getLocale() === "fr" ? "fr-FR" : "en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+  return `<span class="print-date">${t("common.printedOn", { date })}</span>`;
+}
+
 function printResultsHtml() {
   if (!state.results.length) return "";
   return `
     <div class="print-only">
-      <h2>${escapeHtml(state.term)}</h2>
-      <ul class="print-list">
-        ${state.results
-          .map(
-            (item) => `
-          <li>
-            <span>${escapeHtml(item.product_title)} — ${item.price_mad} MAD${item.unit ? ` / ${escapeHtml(item.unit)}` : ""}</span>
-          </li>
-        `
-          )
-          .join("")}
-      </ul>
+      <div class="print-header">
+        <h2>${escapeHtml(state.term)}</h2>
+        ${printDateHtml()}
+      </div>
+      <table class="print-table">
+        <thead>
+          <tr>
+            <th class="print-col-image"></th>
+            <th>${t("pr.searchTitle")}</th>
+            <th>MAD</th>
+            <th>${t("common.unit")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${state.results
+            .map(
+              (item) => `
+            <tr>
+              <td class="print-col-image">${item.image_url ? `<img class="print-thumb" src="${escapeHtml(item.image_url)}" alt="" />` : ""}</td>
+              <td>${escapeHtml(item.product_title)}</td>
+              <td>${item.price_mad}</td>
+              <td>${escapeHtml(item.unit) || "—"}</td>
+            </tr>
+          `
+            )
+            .join("")}
+        </tbody>
+      </table>
     </div>
   `;
 }

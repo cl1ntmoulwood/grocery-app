@@ -3,6 +3,7 @@ import { parseId, sendError } from "../utils/http.js";
 
 const UPDATABLE_FIELDS = [
   "item_name",
+  "category",
   "quantity_needed",
   "unit",
   "source",
@@ -57,6 +58,7 @@ export default async function shoppingListRoutes(fastify) {
   fastify.post("/shopping-list", async (request, reply) => {
     const {
       item_name,
+      category,
       quantity_needed,
       unit,
       source,
@@ -71,11 +73,12 @@ export default async function shoppingListRoutes(fastify) {
 
     try {
       const result = await pool.query(
-        `INSERT INTO shopping_list (item_name, quantity_needed, unit, source, recipe_id, estimated_price_mad, image_url)
-         VALUES ($1, $2, $3, COALESCE($4, 'manual'), $5, $6, $7)
+        `INSERT INTO shopping_list (item_name, category, quantity_needed, unit, source, recipe_id, estimated_price_mad, image_url)
+         VALUES ($1, $2, $3, $4, COALESCE($5, 'manual'), $6, $7, $8)
          RETURNING *`,
         [
           item_name,
+          category ?? null,
           quantity_needed ?? null,
           unit ?? null,
           source ?? null,

@@ -10,10 +10,13 @@ class ApiError extends Error {
 }
 
 async function request(path, options = {}) {
-  // Only set Content-Type when there's actually a body — Fastify's JSON
-  // body parser rejects an application/json request with an empty body
-  // (used by bodyless POSTs like logout/switch-profile) with a 400.
-  const headers = options.body ? { "Content-Type": "application/json" } : {};
+  // Only set Content-Type when there's actually a JSON body — Fastify's
+  // JSON body parser rejects an application/json request with an empty
+  // body (used by bodyless POSTs like logout/switch-profile) with a 400.
+  // A FormData body (file uploads) must NOT get this header either — the
+  // browser sets its own multipart/form-data boundary automatically, and
+  // overriding it here would corrupt the upload.
+  const headers = options.body && !(options.body instanceof FormData) ? { "Content-Type": "application/json" } : {};
   const response = await fetch(path, {
     ...options,
     headers: { ...headers, ...options.headers },
@@ -51,13 +54,16 @@ export const inventoryApi = {
 };
 
 export const recipesApi = {
-  list: () => request("/api/recipes"),
+  list: (search) => request(`/api/recipes${search ? `?search=${encodeURIComponent(search)}` : ""}`),
   get: (id) => request(`/api/recipes/${id}`),
   create: (data) => request("/api/recipes", { method: "POST", ...json(data) }),
   update: (id, data) => request(`/api/recipes/${id}`, { method: "PUT", ...json(data) }),
   remove: (id) => request(`/api/recipes/${id}`, { method: "DELETE" }),
   checkInventory: (id) => request(`/api/recipes/${id}/check-inventory`),
   generateList: (recipeId) => request(`/api/recipes/generate-list?recipe_id=${recipeId}`),
+  lookup: (query) => request(`/api/recipes/lookup?q=${encodeURIComponent(query)}`),
+  importByUrl: (url) => request("/api/recipes/import", { method: "POST", ...json({ url }) }),
+  youtubeSearch: (query) => request(`/api/recipes/youtube-search?q=${encodeURIComponent(query)}`),
 };
 
 export const shoppingListApi = {
@@ -66,6 +72,14 @@ export const shoppingListApi = {
   create: (data) => request("/api/shopping-list", { method: "POST", ...json(data) }),
   update: (id, data) => request(`/api/shopping-list/${id}`, { method: "PUT", ...json(data) }),
   remove: (id) => request(`/api/shopping-list/${id}`, { method: "DELETE" }),
+};
+
+export const uploadsApi = {
+  upload: (file) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return request("/api/uploads", { method: "POST", body: formData });
+  },
 };
 
 export const pricesApi = {
@@ -84,6 +98,9 @@ export const authApi = {
   createProfile: (data) => request("/api/auth/profiles", { method: "POST", ...json(data) }),
   selectProfile: (id, pin) => request(`/api/auth/profiles/${id}/select`, { method: "POST", ...json({ pin }) }),
   switchProfile: () => request("/api/auth/switch-profile", { method: "POST" }),
+  listMemberProfiles: () => request("/api/auth/member-profiles"),
+  createMemberProfile: (data) => request("/api/auth/member-profiles", { method: "POST", ...json(data) }),
+  selectMemberProfile: (id, pin) => request(`/api/auth/member-profiles/${id}/select`, { method: "POST", ...json({ pin }) }),
 };
 
 export { ApiError };

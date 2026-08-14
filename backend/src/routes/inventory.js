@@ -1,7 +1,7 @@
 import { pool } from "../db/pool.js";
 import { parseId, sendError } from "../utils/http.js";
 
-const UPDATABLE_FIELDS = ["name", "category", "quantity", "unit", "low_threshold"];
+const UPDATABLE_FIELDS = ["name", "category", "quantity", "unit", "low_threshold", "image_url"];
 
 // If an item is at or below its low_threshold, ensure it's on the shopping
 // list. Skips if an unpurchased row already exists for this item name
@@ -19,9 +19,9 @@ async function syncLowStockToShoppingList(item, logger) {
     if (existing.rows.length > 0) return;
 
     await pool.query(
-      `INSERT INTO shopping_list (item_name, quantity_needed, unit, source)
-       VALUES ($1, $2, $3, 'low_stock')`,
-      [item.name, item.low_threshold, item.unit]
+      `INSERT INTO shopping_list (item_name, quantity_needed, unit, source, image_url)
+       VALUES ($1, $2, $3, 'low_stock', $4)`,
+      [item.name, item.low_threshold, item.unit, item.image_url ?? null]
     );
   } catch (err) {
     logger.error(err, "Failed to sync low-stock item to shopping list");
@@ -79,7 +79,7 @@ export default async function inventoryRoutes(fastify) {
   });
 
   fastify.post("/inventory", async (request, reply) => {
-    const { name, category, quantity, unit, low_threshold } = request.body ?? {};
+    const { name, category, quantity, unit, low_threshold, image_url } = request.body ?? {};
 
     if (typeof name !== "string" || name.trim() === "") {
       return sendError(reply, 400, "name is required");
@@ -90,10 +90,10 @@ export default async function inventoryRoutes(fastify) {
 
     try {
       const result = await pool.query(
-        `INSERT INTO inventory_items (name, category, quantity, unit, low_threshold)
-         VALUES ($1, $2, $3, $4, COALESCE($5, 0))
+        `INSERT INTO inventory_items (name, category, quantity, unit, low_threshold, image_url)
+         VALUES ($1, $2, $3, $4, COALESCE($5, 0), $6)
          RETURNING *`,
-        [name, category ?? null, quantity, unit ?? null, low_threshold ?? null]
+        [name, category ?? null, quantity, unit ?? null, low_threshold ?? null, image_url ?? null]
       );
       await syncLowStockToShoppingList(result.rows[0], request.log);
       return reply.code(201).send(result.rows[0]);

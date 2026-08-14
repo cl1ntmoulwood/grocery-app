@@ -128,6 +128,96 @@ export default async function authRoutes(fastify) {
     return { needsRegistration: false, household: { id: household.id, name: household.name }, profile };
   });
 
+  // Unguarded on purpose: this is the "not admin" self-service path, so it
+  // never touches the household password. Scoped to "the" household via
+  // the same single-tenant assumption /register already relies on — this
+  // app only ever has one household per deployment. Every profile visible
+  // or selectable here is required to be role='member' AND have a PIN set,
+  // both in the SQL and re-checked on select, so this endpoint group can
+  // never expose or unlock an admin profile or a PIN-less profile.
+  async function getSoleHouseholdId() {
+    const result = await pool.query("SELECT id FROM households LIMIT 1");
+    return result.rows[0]?.id ?? null;
+  }
+
+  fastify.get("/member-profiles", async (request, reply) => {
+    const householdId = await getSoleHouseholdId();
+    if (!householdId) return sendError(reply, 404, "No household yet");
+
+    try {
+      const result = await pool.query(
+        "SELECT * FROM profiles WHERE household_id = $1 AND role = 'member' AND pin_hash IS NOT NULL ORDER BY created_at ASC",
+        [householdId]
+      );
+      return result.rows.map(serializeProfile);
+    } catch (err) {
+      request.log.error(err);
+      return sendError(reply, 500, "Failed to fetch profiles");
+    }
+  });
+
+  fastify.post("/member-profiles", async (request, reply) => {
+    const householdId = await getSoleHouseholdId();
+    if (!householdId) return sendError(reply, 404, "No household yet");
+
+    const { name, avatarEmoji, avatarColor, pin } = request.body ?? {};
+
+    if (typeof name !== "string" || name.trim() === "") {
+      return sendError(reply, 400, "name is required");
+    }
+    if (!/^\d{4,6}$/.test(String(pin ?? ""))) {
+      return sendError(reply, 400, "pin is required and must be 4-6 digits");
+    }
+
+    try {
+      const pinHash = await bcrypt.hash(String(pin), PIN_ROUNDS);
+      const result = await pool.query(
+        `INSERT INTO profiles (household_id, name, avatar_emoji, avatar_color, pin_hash, role)
+         VALUES ($1, $2, COALESCE($3, '🙂'), COALESCE($4, '#1f6f76'), $5, 'member')
+         RETURNING *`,
+        [householdId, name.trim(), avatarEmoji ?? null, avatarColor ?? null, pinHash]
+      );
+      return reply.code(201).send(serializeProfile(result.rows[0]));
+    } catch (err) {
+      if (err.code === "23505") {
+        return sendError(reply, 409, "A profile with that name already exists");
+      }
+      request.log.error(err);
+      return sendError(reply, 500, "Failed to create profile");
+    }
+  });
+
+  fastify.post("/member-profiles/:id/select", async (request, reply) => {
+    const householdId = await getSoleHouseholdId();
+    if (!householdId) return sendError(reply, 404, "No household yet");
+
+    const id = parseId(request.params.id);
+    if (id === null) return sendError(reply, 400, "Invalid id");
+
+    const { pin } = request.body ?? {};
+    if (typeof pin !== "string") {
+      return sendError(reply, 400, "pin is required");
+    }
+
+    try {
+      const result = await pool.query(
+        "SELECT * FROM profiles WHERE id = $1 AND household_id = $2 AND role = 'member' AND pin_hash IS NOT NULL",
+        [id, householdId]
+      );
+      if (result.rows.length === 0) return sendError(reply, 404, "Profile not found");
+
+      const profile = result.rows[0];
+      const match = await bcrypt.compare(pin, profile.pin_hash);
+      if (!match) return sendError(reply, 401, "Incorrect PIN");
+
+      setSession(reply, { householdId, profileId: profile.id, role: profile.role });
+      return serializeProfile(profile);
+    } catch (err) {
+      request.log.error(err);
+      return sendError(reply, 500, "Failed to select profile");
+    }
+  });
+
   fastify.register(async (household) => {
     household.addHook("preHandler", requireHousehold);
 
