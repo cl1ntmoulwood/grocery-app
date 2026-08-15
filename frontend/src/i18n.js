@@ -186,7 +186,7 @@ const translations = {
     "common.addItem": "Ajouter un article",
     "common.print": "Imprimer",
     "common.photo": "Photo",
-    "common.pageTitle": "Suivi Garde-manger & Prix Familial",
+    "common.pageTitle": "Suivi Inventaire Et Courses Ben embarek",
     "common.printedOn": "Imprimé le {{date}}",
     "common.loading": "Chargement…",
     "common.uncategorized": "non catégorisé",
