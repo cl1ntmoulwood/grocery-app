@@ -16,7 +16,7 @@ const translations = {
     "common.addItem": "Add item",
     "common.print": "Print",
     "common.photo": "Photo",
-    "common.pageTitle": "Family Pantry & Price Tracker",
+    "common.pageTitle": "Suivi Inventaire Et Courses Ben embarek",
     "common.printedOn": "Printed {{date}}",
     "common.loading": "Loading…",
     "common.uncategorized": "uncategorized",
