@@ -929,10 +929,11 @@ body.pre-auth .sidebar {
 }
 
 .print-thumb {
-  width: 32px;
-  height: 32px;
+  width: 64px;
+  height: 64px;
   object-fit: cover;
-  border-radius: 3px;
+  border-radius: 4px;
+  border: 1px solid #ccc;
   display: block;
 }
 
